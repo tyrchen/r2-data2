@@ -8,14 +8,14 @@ import {
   Key,
   Link as LinkIcon,
 } from 'lucide-react';
-import { useAppStore, ColumnInfo } from '@/store/useAppStore';
+import { useAppStore, ColumnInfo, DatabaseSchema, TableSchema } from '@/store/useAppStore';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FieldDetailPopup } from "./FieldDetailPopup";
+// import { FieldDetailPopup } from "./FieldDetailPopup"; // Comment out
 import { useDrag } from 'react-dnd';
 
 // Define item types for react-dnd
@@ -36,39 +36,48 @@ interface DatabaseTreeProps {
   filterTerm: string;
 }
 
-// Helper to create tree nodes from store data
+// Update buildTreeNodes to be non-recursive and store minimal data
 const buildTreeNodes = (
-  databases: ReturnType<typeof useAppStore.getState>['availableDatabases'],
-  tables: ReturnType<typeof useAppStore.getState>['tables'],
-  schemas: ReturnType<typeof useAppStore.getState>['tableSchemas'],
+  dbSchemas: DatabaseSchema[],
   selectedDatabase: string | null
 ): TreeNode[] => {
-  return databases.map((db) => {
+  return dbSchemas.map((dbSchema) => {
+    // --- Database Node ---
     const dbNode: TreeNode = {
-      id: `db-${db.name}`,
-      name: db.name,
+      id: `db-${dbSchema.name}`,
+      name: dbSchema.name,
       type: 'database',
-      data: db,
+      // Store only essential primitive data
+      data: { name: dbSchema.name, db_type: dbSchema.db_type },
       children: [],
     };
 
-    if (selectedDatabase === db.name) {
-      dbNode.children = tables.map((table) => {
+    // --- Table Nodes (if selected DB matches) ---
+    if (selectedDatabase === dbSchema.name) {
+      dbNode.children = dbSchema.tables.map((tableSchema: TableSchema) => {
+        // --- Table Node ---
         const tableNode: TreeNode = {
-          id: `table-${db.name}-${table.name}`,
-          name: table.name,
+          id: `table-${dbSchema.name}-${tableSchema.table_name}`,
+          name: tableSchema.table_name,
           type: 'table',
-          data: table,
+          // Store only essential primitive data
+          data: { name: tableSchema.table_name },
           children: [],
         };
 
-        const schema = schemas[table.name];
-        if (schema && schema.columns) {
-          tableNode.children = schema.columns.map((col) => ({
-            id: `col-${db.name}-${table.name}-${col.name}`,
+        // --- Column Nodes ---
+        if (tableSchema.columns) {
+          tableNode.children = tableSchema.columns.map((col: ColumnInfo) => ({
+            id: `col-${dbSchema.name}-${tableSchema.table_name}-${col.name}`,
             name: col.name,
             type: 'column',
-            data: col,
+            // Store only essential primitive data + is_pk/fk_table for icons
+            data: {
+              name: col.name,
+              data_type: col.data_type,
+              is_pk: col.is_pk,
+              fk_table: col.fk_table
+            },
           }));
         }
         return tableNode;
@@ -108,50 +117,57 @@ const filterTree = (nodes: TreeNode[], term: string): TreeNode[] => {
 };
 
 // TreeNode Component for rendering individual nodes
-const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level }) => {
+// Re-add TreeNodeItemProps and React.memo
+interface TreeNodeItemProps {
+  node: TreeNode;
+  level: number;
+  selectedDatabase: string | null; // Pass selected DB as prop
+}
+const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({ node, level, selectedDatabase }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const { setSelectedDatabase, selectedDatabase } = useAppStore((state) => ({
-    setSelectedDatabase: state.setSelectedDatabase,
-    selectedDatabase: state.selectedDatabase,
-  }));
-  const tableSchemas = useAppStore((state) => state.tableSchemas);
+  // Only subscribe to the action, not the selectedDatabase state itself
+  const setSelectedDatabase = useAppStore((state) => state.setSelectedDatabase);
+  // We don't need tableSchemas here anymore, can rely on node.children presence
+  // const tableSchemas = useAppStore((state) => state.tableSchemas);
 
+  // Use prop for selected DB check
   const hasChildren = node.children && node.children.length > 0;
   const isSelectedDb = node.type === 'database' && selectedDatabase === node.name;
 
-  // --- Drag Source Hook ---
-  const [{ isDragging }, dragRef] = useDrag(() => ({
+  // --- Drag Source Hook --- (Commented out for debugging)
+  const dragRef = React.useRef(null); // Dummy ref
+  const isDragging = false; // Dummy state
+  /* const [{ isDragging }, dragRef] = useDrag(() => ({
     type: ItemTypes.SCHEMA_ITEM,
     item: { name: node.name, type: node.type }, // Data to pass on drop
     collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
     // Only allow dragging tables and columns
     canDrag: node.type === 'table' || node.type === 'column',
   }), [node.name, node.type]); // Dependencies
+  */
 
   const handleExpandToggle = (event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent click from bubbling up
+    event.stopPropagation();
     if (node.type === 'database') {
-      setSelectedDatabase(node.name);
+      setSelectedDatabase(node.name); // Action call is fine
     }
-    // Allow expansion if node has children or is a table (columns might load)
-    if (hasChildren || node.type === 'table') {
+    // Rely only on presence of children now for tables
+    if (hasChildren) {
       setIsExpanded(!isExpanded);
     }
   };
 
   const handleNodeClick = () => {
     if (node.type === 'database') {
-      setSelectedDatabase(node.name);
+      setSelectedDatabase(node.name); // Action call is fine
       if (hasChildren) setIsExpanded(true);
     } else if (node.type === 'table') {
-      // Expand if it has children (columns)
       if (hasChildren) {
         setIsExpanded(true);
       }
     } else if (node.type === 'column') {
-      console.log("Column clicked, Popover should handle open:", node.data);
+      // Logic for popup can be added back later
+      console.log("Column clicked:", node.data);
     }
   }
 
@@ -159,134 +175,125 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
   if (node.type === 'database') IconComponent = Database;
   if (node.type === 'table') IconComponent = Table;
 
-  // Get column info if it's a column node
-  const columnInfo = node.type === 'column' ? (node.data as ColumnInfo) : null;
+  // Get column data from node.data if needed for icons
+  const columnData = node.type === 'column' ? node.data : null;
 
-  const indent = level * 16; // 16px indent per level
+  const indent = level * 16;
 
   const isExpandable = node.type === 'database' || node.type === 'table';
 
-  // Combine refs for the draggable element
-  const combinedRef = (el: HTMLSpanElement | null) => {
-    dragRef(el); // Attach drag ref
-    // Can attach other refs here if needed
-  };
+  const combinedRef = dragRef; // Use dummy ref
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div>
-        <div
-          className={`flex items-center space-x-1 p-1 rounded hover:bg-muted ${isSelectedDb ? 'bg-muted' : ''} ${isDragging ? 'opacity-50' : ''}`}
-          style={{ paddingLeft: `${indent}px` }}
-        >
-          {isExpandable && (
-            <span
-              onClick={handleExpandToggle}
-              className="w-4 h-4 flex items-center justify-center cursor-pointer"
-            >
-              {hasChildren || (node.type === 'table' && !tableSchemas[node.name]) ? ( // Show chevron if expandable
-                isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-              ) : (
-                <span className="w-4"></span> // Placeholder for alignment
-              )}
-            </span>
-          )}
-          {!isExpandable && <span className="w-4"></span>} {/* Indent columns */}
-          <IconComponent size={14} className="flex-shrink-0 text-muted-foreground mr-1" />
-          {node.type === 'column' ? (
-            <FieldDetailPopup column={columnInfo}>
-              <span ref={combinedRef} className="text-sm truncate flex-grow cursor-grab" onClick={handleNodeClick}>
-                {node.name}
-              </span>
-            </FieldDetailPopup>
-          ) : node.type === 'table' ? (
-            <span ref={combinedRef} className="text-sm truncate flex-grow cursor-grab" onClick={handleNodeClick}>
-              {node.name}
-            </span>
-          ) : (
-            <span className="text-sm truncate flex-grow cursor-pointer" onClick={handleNodeClick}>
-              {node.name}
-            </span>
-          )}
-          <div className="ml-auto flex items-center space-x-1 pr-1">
-            {columnInfo?.is_pk && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Key size={12} className="flex-shrink-0 text-yellow-500" />
-                </TooltipTrigger>
-                <TooltipContent><p>Primary Key</p></TooltipContent>
-              </Tooltip>
+    // Outer div for the node and its potential children
+    <div>
+      {/* The main row for the node itself */}
+      <div
+        className={`flex items-center space-x-1 p-1 rounded hover:bg-muted ${isSelectedDb ? 'bg-muted' : ''}`}
+        style={{ paddingLeft: `${indent}px` }}
+      >
+        {/* Expand/Collapse Chevron */}
+        {isExpandable ? (
+          <span
+            onClick={handleExpandToggle}
+            className="w-4 h-4 flex items-center justify-center cursor-pointer"
+          >
+            {hasChildren ? ( // Only rely on actual children for chevron
+              isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+            ) : (
+              <span className="w-4"></span> // Placeholder if no children
             )}
-            {columnInfo?.fk_table && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <LinkIcon size={12} className="flex-shrink-0 text-blue-500" />
-                </TooltipTrigger>
-                <TooltipContent><p>Foreign Key to {columnInfo.fk_table}.{columnInfo.fk_column}</p></TooltipContent>
-              </Tooltip>
-            )}
-          </div>
+          </span>
+        ) : (
+          <span className="w-4"></span> // Indent non-expandable
+        )}
+
+        {/* Icon */}
+        <IconComponent size={14} className="flex-shrink-0 text-muted-foreground mr-1" />
+
+        {/* Node Name (conditionally rendered span) */}
+        {/* Removed FieldDetailPopup wrapper, removed cursor-grab */}
+        {node.type === 'column' ? (
+          <span ref={combinedRef} className="text-sm truncate flex-grow cursor-default" onClick={handleNodeClick}>
+            {node.name}
+          </span>
+        ) : node.type === 'table' ? (
+          <span ref={combinedRef} className="text-sm truncate flex-grow cursor-default" onClick={handleNodeClick}>
+            {node.name}
+          </span>
+        ) : (
+          <span className="text-sm truncate flex-grow cursor-pointer" onClick={handleNodeClick}>
+            {node.name}
+          </span>
+        )}
+
+        {/* PK/FK Icons - Tooltips removed for debugging */}
+        <div className="ml-auto flex items-center space-x-1 pr-1">
+          {columnData?.is_pk && (
+            <Key size={12} className="flex-shrink-0 text-yellow-500" />
+          )}
+          {columnData?.fk_table && (
+            <LinkIcon size={12} className="flex-shrink-0 text-blue-500" />
+          )}
         </div>
-        {isExpanded && hasChildren && (
-          <div className="ml-0"> {/* Let child handle own indentation */}
-            {node.children?.map((child) => (
-              <TreeNodeItem key={child.id} node={child} level={level + 1} />
-            ))}
-          </div>
-        )}
-        {/* Show loading for table columns if expanded but schema not yet loaded */}
-        {node.type === 'table' && isExpanded && !tableSchemas[node.name] && !hasChildren && (
-          <div style={{ paddingLeft: `${(level + 1) * 16}px` }} className="p-1 text-xs text-muted-foreground italic">
-            Loading columns...
-          </div>
-        )}
       </div>
-    </TooltipProvider>
+
+      {/* Render Children if Expanded */}
+      {isExpanded && hasChildren && (
+        <div className="ml-0">
+          {node.children?.map((child) => (
+            // Pass selectedDatabase prop down
+            <TreeNodeItem key={child.id} node={child} level={level + 1} selectedDatabase={selectedDatabase} />
+          ))}
+        </div>
+      )}
+
+      {/* Remove loading indicator as columns are now included directly */}
+      {/* {node.type === 'table' && isExpanded && !tableSchemas[node.name] && !hasChildren && (...)} */}
+    </div>
   );
-};
+}); // End of React.memo wrapper
 
 export function DatabaseTree({ filterTerm }: DatabaseTreeProps) {
-  const databases = useAppStore((state) => state.availableDatabases);
   const selectedDatabase = useAppStore((state) => state.selectedDatabase);
-  const tables = useAppStore((state) => state.tables);
-  const schemas = useAppStore((state) => state.tableSchemas);
+  const fullSchemaData = useAppStore((state) => state.fullSchemaData);
   const isLoadingFullSchema = useAppStore((state) => state.isFetchingFullSchema);
   const fullSchemaError = useAppStore((state) => state.fullSchemaError);
 
   // Memoize tree building and filtering
-  const treeNodes = React.useMemo(() =>
-    buildTreeNodes(databases, tables, schemas, selectedDatabase),
-    [databases, tables, schemas, selectedDatabase]
-  );
+  const treeNodes = React.useMemo(() => {
+    const dbSchemas = fullSchemaData?.databases || [];
+    return buildTreeNodes(dbSchemas, selectedDatabase);
+  }, [fullSchemaData, selectedDatabase]);
 
   const filteredNodes = React.useMemo(() =>
     filterTree(treeNodes, filterTerm),
     [treeNodes, filterTerm]
   );
 
-  // Use the new loading state, checking if fullSchemaData is null
-  const fullSchemaData = useAppStore((state) => state.fullSchemaData);
+  // Loading/Error states remain the same
   if (isLoadingFullSchema && !fullSchemaData) {
     return <div className="p-4 text-muted-foreground">Loading schema...</div>;
   }
-
   if (fullSchemaError) {
     return <div className="p-4 text-destructive">Error loading schema: {fullSchemaError}</div>;
   }
-
   if (filteredNodes.length === 0 && !filterTerm) {
-    return <div className="p-4 text-muted-foreground">No databases found. Click refresh?</div>;
+    return <div className="p-4 text-muted-foreground">No databases found.</div>;
   }
-
   if (filteredNodes.length === 0 && filterTerm) {
     return <div className="p-4 text-muted-foreground">No matching items found for "{filterTerm}".</div>;
   }
 
   return (
-    <div className="p-1">
-      {filteredNodes.map((node) => (
-        <TreeNodeItem key={node.id} node={node} level={0} />
-      ))}
-    </div>
+    // Ensure TooltipProvider wraps the list
+    <TooltipProvider delayDuration={300}>
+      <div className="p-1">
+        {filteredNodes.map((node) => (
+          // Pass selectedDatabase prop
+          <TreeNodeItem key={node.id} node={node} level={0} selectedDatabase={selectedDatabase} />
+        ))}
+      </div>
+    </TooltipProvider>
   );
 }

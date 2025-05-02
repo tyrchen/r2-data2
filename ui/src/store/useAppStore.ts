@@ -562,17 +562,6 @@ export const useAppStore = create<AppState>()(
         chartConfig: state.chartConfig,
         // Do not persist fullSchemaData, errors, loading states
       }),
-      onRehydrateStorage: () => {
-        console.log("Hydration finished.");
-        return (_state, error) => {
-          if (error) {
-            console.error("An error happened during hydration", error);
-          } else {
-            // Run init logic after hydration
-            useAppStore.getState().init();
-          }
-        };
-      },
     }
   )
   ));
