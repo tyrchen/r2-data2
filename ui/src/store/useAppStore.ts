@@ -513,63 +513,85 @@ export const useAppStore = create<AppState>()(
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ db_name: dbName, query })
           });
-          const resultData = await response.json();
+          const resultDataArray: Record<string, any>[] = await response.json(); // Expect an array now
+
           if (!response.ok) {
-            throw new Error(resultData.error || resultData.message || `Query execution failed. Status: ${response.status}`);
+            // Attempt to get error from array structure is tricky, rely on status/generic msg
+            throw new Error(`Query execution failed. Status: ${response.status}`);
           }
 
-          // Update result for the specific tab
+          // --- FIX: Wrap the received array in the expected QueryResultData structure ---
+          const formattedResultData: QueryResultData = {
+            result: resultDataArray ?? [], // Ensure result is always an array, even if null/undefined returned
+            // We don't get columns/rows/message/affectedRows from this backend format
+          };
+          // --- END FIX ---
+
+          // Update the specific tab with the *formatted* resultData
           set((state) => ({
-            tabs: state.tabs.map(t => t.id === tabId ? { ...t, isRunning: false, result: resultData, error: null } : t)
+            tabs: state.tabs.map(t =>
+              t.id === tabId ? { ...t, isRunning: false, result: formattedResultData, error: null } : t // Use formatted data
+            ),
           }));
 
         } catch (error: any) {
-          console.error("Query execution failed:", error);
-          // Update error for the specific tab
+          console.error(`Query execution failed for tab ${tabId}:`, error);
+          // Update the specific tab with the error
           set((state) => ({
-            tabs: state.tabs.map(t => t.id === tabId ? { ...t, isRunning: false, result: null, error: error.message || 'Unknown error' } : t)
+            tabs: state.tabs.map(t =>
+              t.id === tabId ? { ...t, isRunning: false, error: error.message || 'An unknown error occurred' } : t
+            ),
           }));
         }
       },
       // --- END REFACTOR ---
 
-      // Initialize activeTabId after store hydration
+      // Initialize the store
       init: () => {
-        const initialTabs = get().tabs;
-        if (initialTabs.length > 0 && !get().activeTabId) {
-          set({ activeTabId: initialTabs[0].id });
+        // Set active tab ID after initial tabs are potentially loaded from persist
+        const initialTabId = get().tabs[0]?.id ?? null;
+        if (initialTabId && !get().activeTabId) { // Only set if not already set (e.g., by persist)
+          set({ activeTabId: initialTabId });
         }
-        if (initialTabs.length === 0) { // Ensure at least one tab exists
-          const newTab = createNewTab();
-          set({ tabs: [newTab], activeTabId: newTab.id });
-        }
-        // Fetch schema if token exists
-        if (get().authToken) {
-          get().fetchFullSchema();
-        }
+        // Initial fetch of full schema
+        get().fetchFullSchema();
+        // Load persisted history (if not handled by persist middleware directly)
+        // const history = localStorage.getItem('queryHistory');
+        // if (history) {
+        //   set({ queryHistory: JSON.parse(history) });
+        // }
       },
     }),
     {
-      name: 'AppStorePersistence',
-      storage: createJSONStorage(() => localStorage),
+      name: 'app-storage', // name of the item in the storage (must be unique)
+      storage: createJSONStorage(() => localStorage), // Use localStorage
       partialize: (state) => ({
+        // Selectively persist state
         authToken: state.authToken,
-        tabs: state.tabs.map(tab => ({ ...tab, result: null, error: null, isRunning: false })),
-        activeTabId: state.activeTabId,
-        // Persist selected DB, but not the full schema (fetch on load)
         selectedDatabase: state.selectedDatabase,
-        layoutSizes: state.layoutSizes,
+        queryHistory: state.queryHistory,
+        tabs: state.tabs.map(tab => ({ // Persist tabs, but reset running state
+          id: tab.id,
+          name: tab.name,
+          query: tab.query,
+          result: null, // Don't persist large results
+          error: null,
+          isRunning: false, // Always reset running state
+        })),
+        activeTabId: state.activeTabId,
+        layoutSizes: state.layoutSizes, // Persist layout
         collapsedPanels: state.collapsedPanels,
-        chartConfig: state.chartConfig,
-        // Do not persist fullSchemaData, errors, loading states
+        // Do not persist: fullSchemaData, isFetchingFullSchema, etc.
+        // Do not persist: chartConfig, showVisualization, selectedChartType (UI state)
       }),
+      // onRehydrateStorage removed as it caused issues
     }
   )
   ));
 
-// Helper function to get the state of the currently active tab
+// Selector to get the data for the currently active tab
 export const useActiveTabData = () => {
   const tabs = useAppStore((state) => state.tabs);
   const activeTabId = useAppStore((state) => state.activeTabId);
-  return tabs.find(tab => tab.id === activeTabId);
+  return tabs.find(tab => tab.id === activeTabId) || null;
 };
