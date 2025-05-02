@@ -14,11 +14,11 @@ const AGGREGATION_TYPES = ['none', 'sum', 'average', 'count', 'min', 'max'];
 
 export function ChartConfigPanel() {
   const activeTab = useActiveTabData();
-  const { chartConfig, setChartConfig, selectedChartType } = useAppStore((state) => ({
-    chartConfig: state.chartConfig,
-    setChartConfig: state.setChartConfig,
-    selectedChartType: state.selectedChartType,
-  }));
+  // Select individual state pieces
+  const chartConfig = useAppStore((state) => state.chartConfig);
+  const setChartConfig = useAppStore((state) => state.setChartConfig);
+  const selectedChartType = useAppStore((state) => state.selectedChartType);
+
   // Determine available columns from the active tab's data
   const availableColumns = React.useMemo(() => {
     const data = activeTab?.result?.result;
