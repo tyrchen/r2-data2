@@ -2,9 +2,16 @@
 
 # r2-data2
 
-r2-data2 is a web-based SQL query tool, data browser, and visualization platform built with a Rust (Axum) backend and a React (TypeScript/Vite) frontend.
+r2-data2 is a web-based SQL query tool, data browser, and visualization platform built with a Rust (Axum) backend and a React (TypeScript/Vite) frontend. The whole code (95%) is built by AI agent. As a human, I only generate the initial design and the instructions for the AI agent. There are several issues AI agent (using gemini-2.5-pro) keep failing:
 
-<!-- Add Screenshot/GIF Here -->
+- The initial tailwind 4 integration, even I give it the doc, it still use the old way.
+- papaya::HashMap::pin() can't be used by async functions. Everytime the UI want's to remove it and use a different solution (mutex hashmap), so I have to manually fix it by using pin_owned().
+- SqlEditor: when it needs to pull type `import { TableColumn, DataTable } from '@sqlrooms/duckdb';`. It kept using the wrong package, and I have to manually fix it.
+
+This is still imperfect, but it's working and it just spent me 2-3 nights to build it (about 10 hours which I'm still doing several more projects/explorations while waiting for the AI agent to finish). So it is pretty amazing, especially for someone like me who knows only a little bit about react frontend development.
+
+
+![r2-data2 screenshot](./docs/images/ui.jpg)
 
 ## Features
 
