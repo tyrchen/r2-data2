@@ -1,0 +1,19 @@
+# Sample API requests for testing
+
+@port = 3111
+
+OPTIONS  http://localhost:{{port}}
+
+### Get all databases
+GET http://localhost:{{port}}/api/databases
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M
+
+
+### Get all tables for a database
+GET http://localhost:{{port}}/api/databases/users/tables
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M
+
+
+### Get table schema
+GET http://localhost:{{port}}/api/databases/users/tables/public.repositories/schema
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M

@@ -1,0 +1,9 @@
+# Development specific configuration (overrides default.toml)
+
+# Example: Use a different port or DB for development
+# server_addr = "127.0.0.1:8080"
+
+# [[databases]]
+# name = "dev_db"
+# type = "PostgreSQL"
+# conn_string = "postgres://dev_user:dev_pass@localhost:5432/devdatabase"

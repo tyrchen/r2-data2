@@ -1,0 +1,8 @@
+/target
+Cargo.lock
+.vscode
+node_modules
+
+# Environment variables
+.env
+ui/.env

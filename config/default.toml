@@ -1,0 +1,15 @@
+# Default configuration
+
+# Server settings
+server_addr = "127.0.0.1:3111"
+# JWT settings (Example - replace with actual secrets)
+jwt_secret = "your-super-secret-jwt-key"
+
+# CORS settings (Example - adjust for your frontend origin)
+allowed_origin = "http://localhost:5173"
+
+# Database configurations (Example - adjust as needed)
+[[databases]]
+name = "users"
+type = "postgres"
+conn_string = "postgres://localhost:5432/r2-data-2-users"
