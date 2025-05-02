@@ -10,18 +10,10 @@ import {
 } from 'lucide-react';
 import { useAppStore, ColumnInfo, DatabaseSchema, TableSchema } from '@/store/useAppStore';
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
 // import { FieldDetailPopup } from "./FieldDetailPopup"; // Comment out
-import { useDrag } from 'react-dnd';
 
-// Define item types for react-dnd
-const ItemTypes = {
-  SCHEMA_ITEM: 'schemaItem',
-};
 
 // Interface for the tree node structure we'll build
 interface TreeNode {
@@ -157,7 +149,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({
 
   // --- Drag Source Hook --- (Commented out for debugging)
   const dragRef = React.useRef(null); // Dummy ref
-  const isDragging = false; // Dummy state
+  // const isDragging = false; // Dummy state
   /* const [{ isDragging }, dragRef] = useDrag(() => ({
     type: ItemTypes.SCHEMA_ITEM,
     item: { name: node.name, type: node.type }, // Data to pass on drop

@@ -7,7 +7,6 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import {
-  PanelLeftClose,
   PanelRightOpen,
 } from "lucide-react";
 
@@ -35,7 +34,6 @@ export function ThreeColumnLayout({
   const collapsedPanels = useAppStore((state) => state.collapsedPanels);
   const togglePanelCollapse = useAppStore((state) => state.togglePanelCollapse);
 
-  const isToolboxCollapsed = collapsedPanels[TOOLBOX_PANEL_ID] ?? false;
   const isCatalogCollapsed = collapsedPanels[CATALOG_PANEL_ID] ?? false;
 
   const handleHorizontalLayout: (sizes: number[]) => void = (sizes: number[]) => {

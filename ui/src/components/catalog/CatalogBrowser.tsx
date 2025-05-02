@@ -7,7 +7,6 @@ export function CatalogBrowser() {
   // TODO: Connect search term to actual filtering logic in DatabaseTree
   const [filterTerm, setFilterTerm] = React.useState('');
   const isLoading = useAppStore((state) => state.isFetchingFullSchema);
-  const error = useAppStore((state) => state.fullSchemaError);
   const fetchFullSchema = useAppStore((state) => state.fetchFullSchema);
 
   const handleSearchChange = (term: string) => {
