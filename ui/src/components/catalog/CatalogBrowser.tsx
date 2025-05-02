@@ -6,22 +6,12 @@ import { useAppStore } from '@/store/useAppStore';
 export function CatalogBrowser() {
   // TODO: Connect search term to actual filtering logic in DatabaseTree
   const [filterTerm, setFilterTerm] = React.useState('');
+  const isLoading = useAppStore((state) => state.isFetchingFullSchema);
+  const error = useAppStore((state) => state.fullSchemaError);
 
   const handleSearchChange = (term: string) => {
     console.log("Search term:", term);
     setFilterTerm(term);
-  };
-
-  // Refresh action - Fetches databases and selected DB's tables
-  const handleRefresh = async () => {
-    console.log("Refresh clicked");
-    const fetchDatabases = useAppStore.getState().fetchAvailableDatabases;
-    const fetchTables = useAppStore.getState().fetchTablesForSelectedDB;
-    await fetchDatabases(); // Re-fetch databases
-    // Re-fetch tables only if a database is selected
-    if (useAppStore.getState().selectedDatabase) {
-      await fetchTables();
-    }
   };
 
   return (
@@ -31,7 +21,6 @@ export function CatalogBrowser() {
       <div className="flex-shrink-0">
         <SearchFilterBar
           onSearchChange={handleSearchChange}
-          onRefresh={handleRefresh}
           placeholder="Search databases, tables..."
         />
       </div>

@@ -110,8 +110,7 @@ const filterTree = (nodes: TreeNode[], term: string): TreeNode[] => {
 // TreeNode Component for rendering individual nodes
 const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const { fetchSchemaForTable, setSelectedDatabase, selectedDatabase } = useAppStore((state) => ({
-    fetchSchemaForTable: state.fetchSchemaForTable,
+  const { setSelectedDatabase, selectedDatabase } = useAppStore((state) => ({
     setSelectedDatabase: state.setSelectedDatabase,
     selectedDatabase: state.selectedDatabase,
   }));
@@ -134,15 +133,10 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
   const handleExpandToggle = (event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent click from bubbling up
     if (node.type === 'database') {
-      // If clicking on a DB, select it (which triggers table fetch)
       setSelectedDatabase(node.name);
-    } else if (node.type === 'table' && node.data) {
-      // If clicking on a table, fetch its schema if not already loaded
-      if (!tableSchemas[node.name]) {
-        fetchSchemaForTable(node.name);
-      }
     }
-    if (hasChildren || node.type === 'table') { // Allow tables to expand even if children (cols) aren't loaded yet
+    // Allow expansion if node has children or is a table (columns might load)
+    if (hasChildren || node.type === 'table') {
       setIsExpanded(!isExpanded);
     }
   };
@@ -151,11 +145,9 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
     if (node.type === 'database') {
       setSelectedDatabase(node.name);
       if (hasChildren) setIsExpanded(true);
-    } else if (node.type === 'table' && node.data) {
-      if (!tableSchemas[node.name]) {
-        fetchSchemaForTable(node.name);
-      }
-      if (!tableSchemas[node.name] || hasChildren) {
+    } else if (node.type === 'table') {
+      // Expand if it has children (columns)
+      if (hasChildren) {
         setIsExpanded(true);
       }
     } else if (node.type === 'column') {
@@ -258,8 +250,8 @@ export function DatabaseTree({ filterTerm }: DatabaseTreeProps) {
   const selectedDatabase = useAppStore((state) => state.selectedDatabase);
   const tables = useAppStore((state) => state.tables);
   const schemas = useAppStore((state) => state.tableSchemas);
-  const isLoading = useAppStore((state) => state.isLoadingSchema);
-  const error = useAppStore((state) => state.schemaError);
+  const isLoadingFullSchema = useAppStore((state) => state.isFetchingFullSchema);
+  const fullSchemaError = useAppStore((state) => state.fullSchemaError);
 
   // Memoize tree building and filtering
   const treeNodes = React.useMemo(() =>
@@ -272,12 +264,14 @@ export function DatabaseTree({ filterTerm }: DatabaseTreeProps) {
     [treeNodes, filterTerm]
   );
 
-  if (isLoading && databases.length === 0) {
-    return <div className="p-4 text-muted-foreground">Loading databases...</div>;
+  // Use the new loading state, checking if fullSchemaData is null
+  const fullSchemaData = useAppStore((state) => state.fullSchemaData);
+  if (isLoadingFullSchema && !fullSchemaData) {
+    return <div className="p-4 text-muted-foreground">Loading schema...</div>;
   }
 
-  if (error) {
-    return <div className="p-4 text-destructive">Error: {error}</div>;
+  if (fullSchemaError) {
+    return <div className="p-4 text-destructive">Error loading schema: {fullSchemaError}</div>;
   }
 
   if (filteredNodes.length === 0 && !filterTerm) {

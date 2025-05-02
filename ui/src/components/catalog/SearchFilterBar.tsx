@@ -6,27 +6,22 @@ import debounce from 'lodash.debounce';
 import { useAppStore } from '@/store/useAppStore'; // Import store to get loading state
 
 interface SearchFilterBarProps {
-  onSearchChange: (searchTerm: string) => void;
-  onRefresh: () => Promise<void>;
+  onSearchChange: (term: string) => void;
   placeholder?: string;
-  debounceMs?: number;
 }
 
 export function SearchFilterBar({
   onSearchChange,
-  onRefresh,
-  placeholder = "Search schemas...", // Updated placeholder
-  debounceMs = 300,
+  placeholder = "Search...",
 }: SearchFilterBarProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const isLoading = useAppStore((state) => state.isLoadingSchema); // Get loading state
 
   // Debounce the callback function
   const debouncedSearch = useCallback(
     debounce((term: string) => {
       onSearchChange(term);
-    }, debounceMs),
-    [onSearchChange, debounceMs]
+    }, 300),
+    [onSearchChange]
   );
 
   useEffect(() => {
@@ -52,8 +47,8 @@ export function SearchFilterBar({
         className="flex-grow"
       />
       {/* Refresh Button */}
-      <Button variant="outline" size="icon" onClick={onRefresh} disabled={isLoading}>
-        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+      <Button variant="outline" size="icon">
+        <RefreshCw className="h-4 w-4 animate-spin" />
       </Button>
     </div>
   );

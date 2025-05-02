@@ -2,37 +2,59 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { ChartType } from '@/components/viz/ChartTypeSelector'; // Import ChartType
 import { v4 as uuidv4 } from 'uuid'; // For generating unique tab IDs
+// Import the backend schema types (assuming they are exported from handlers or a models file)
+// If they live elsewhere, adjust the import path
+// We might need to create corresponding TS interfaces if direct import isn't feasible
+// import type { FullSchema, DatabaseSchema, TableSchema, ColumnInfo } from '../../src/handlers/mod'; // Adjust path if needed -- REMOVED
+
+// --- SCHEMA Interfaces (Matching Rust Structs) ---
+export interface ColumnInfo { // Assuming this matches backend TableSchema column
+  name: string;
+  data_type: string; // Keep simple string type name from backend
+  is_nullable: boolean;
+  is_pk?: boolean;
+  is_unique?: boolean;
+  fk_table?: string | null;
+  fk_column?: string | null;
+}
+
+export interface TableSchema { // Assuming this matches backend DatabaseSchema tables element
+  table_name: string;
+  columns: ColumnInfo[];
+  // Add constraints if available from backend
+}
+
+export interface DatabaseSchema { // Assuming this matches backend FullSchema databases element
+  name: string;
+  db_type: string;
+  tables: TableSchema[];
+}
+
+export interface FullSchema { // Assuming this matches the root object from /api/schema
+  databases: DatabaseSchema[];
+}
+// --- END SCHEMA Interfaces ---
 
 // Read API base URL from env, default if not set
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3111';
 
-// Export original interfaces
+// --- Derived/Legacy Interfaces ---
+// Still used by some components, populated from FullSchema
 export interface DatabaseEntry {
   name: string;
-  type: string; // "PostgreSQL", "MySQL", etc.
+  db_type: string;
 }
 
 export interface TableEntry {
-  name: string; // e.g., "public.users"
-  type: string; // e.g., "BASE TABLE", "VIEW"
-}
-
-export interface TableSchema {
-  table_name: string;
-  columns: ColumnInfo[];
-  // constraints?: any; // Add later if needed
-}
-
-export interface ColumnInfo {
   name: string;
-  data_type: string; // Use string type name for simplicity in frontend
-  is_nullable: boolean;
-  is_pk?: boolean;
-  is_unique?: boolean;
-  fk_table?: string;
-  fk_column?: string;
+  // table_type: string; // Maybe not needed if we just list names
 }
+// --- END Derived/Legacy Interfaces ---
 
+// Re-export backend types if needed, or map them in the store
+// export type { FullSchema, DatabaseSchema, TableSchema, ColumnInfo }; -- REMOVED
+
+// --- Query Result / Tab Interfaces remain the same ---
 export interface QueryResultData {
   columns?: string[]; // Column names (if using array of arrays)
   rows?: any[][]; // Array of arrays
@@ -59,17 +81,19 @@ export interface AppState {
   authToken: string | null;
   setAuthToken: (token: string | null) => void;
 
-  // Database / Schema
-  availableDatabases: DatabaseEntry[];
+  // --- REFACTORED: Schema State ---
+  fullSchemaData: FullSchema | null;
+  isFetchingFullSchema: boolean;
+  fullSchemaError: string | null;
+  fetchFullSchema: () => Promise<void>;
+
+  // Derived/Selected State (Populated from fullSchemaData)
+  availableDatabases: DatabaseEntry[]; // Still useful for DatabaseSelector
   selectedDatabase: string | null;
-  tables: TableEntry[];
-  tableSchemas: Record<string, TableSchema>; // Cache for schemas { [tableName]: schema }
-  isLoadingSchema: boolean;
-  schemaError: string | null;
-  fetchAvailableDatabases: () => Promise<void>;
+  tables: TableEntry[]; // Tables for the *selected* database
+  tableSchemas: Record<string, TableSchema>; // Schemas for the *selected* database tables
   setSelectedDatabase: (dbName: string | null) => void;
-  fetchTablesForSelectedDB: () => Promise<void>;
-  fetchSchemaForTable: (tableName: string) => Promise<void>;
+  // --- END REFACTOR ---
 
   // Query
   currentQuery: string;
@@ -169,15 +193,20 @@ export const useAppStore = create<AppState>()(
   devtools(persist(
     (set, get) => ({
       // --- Initial State ---
-      // Read token from Vite environment variable if available
       authToken: import.meta.env.VITE_AUTH_TOKEN || null,
+
+      // --- REFACTORED: Schema Initial State ---
+      fullSchemaData: null,
+      isFetchingFullSchema: false,
+      fullSchemaError: null,
       availableDatabases: [],
       selectedDatabase: null,
       tables: [],
       tableSchemas: {},
-      isLoadingSchema: false,
-      schemaError: null,
-      currentQuery: 'SELECT * FROM ...;', // Default query example
+      // --- END REFACTOR ---
+
+      // --- Other initial states ... ---
+      currentQuery: 'SELECT * FROM ...;',
       queryResult: null,
       queryError: null,
       isQueryRunning: false,
@@ -209,129 +238,94 @@ export const useAppStore = create<AppState>()(
       // Auth
       setAuthToken: (token) => set({ authToken: token }),
 
-      // Database / Schema
-      fetchAvailableDatabases: async () => {
-        set({ isLoadingSchema: true, schemaError: null });
-        const token = get().authToken; // Get token from state
-
+      // --- REFACTORED: Schema Actions ---
+      fetchFullSchema: async () => {
+        const token = get().authToken;
         if (!token) {
-          set({ schemaError: 'Authentication token is missing.', isLoadingSchema: false });
+          set({ fullSchemaError: 'Authentication token is missing.', isFetchingFullSchema: false });
           return;
         }
 
+        set({ isFetchingFullSchema: true, fullSchemaError: null });
         try {
-          console.log(`url: ${API_BASE_URL}/api/databases`);
-          const response = await fetch(`${API_BASE_URL}/api/databases`, {
+          const response = await fetch(`${API_BASE_URL}/api/schema`, { // Updated endpoint
             headers: {
               'Authorization': `Bearer ${token}`
             }
           });
+
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
-            throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+            throw new Error(errorData.message || `Failed to fetch full schema. Status: ${response.status}`);
           }
-          // Assuming the backend returns DatabaseEntry[] directly
-          const data: DatabaseEntry[] = await response.json();
-          set({ availableDatabases: data, isLoadingSchema: false });
+
+          const schemaData: FullSchema = await response.json();
+
+          // --- Populate derived state from full schema ---
+          const databases: DatabaseEntry[] = schemaData.databases.map(db => ({
+            name: db.name,
+            db_type: db.db_type,
+          }));
+
+          let selectedDbTables: TableEntry[] = [];
+          let selectedDbSchemas: Record<string, TableSchema> = {};
+          const currentSelectedDb = get().selectedDatabase;
+
+          if (currentSelectedDb) {
+            const dbSchema = schemaData.databases.find(db => db.name === currentSelectedDb);
+            if (dbSchema) {
+              selectedDbTables = dbSchema.tables.map(t => ({ name: t.table_name /* , table_type: t.table_type */ }));
+              selectedDbSchemas = dbSchema.tables.reduce((acc, schema) => {
+                acc[schema.table_name] = schema;
+                return acc;
+              }, {} as Record<string, TableSchema>);
+            }
+          }
+          // --- End Populate derived state ---
+
+          set({
+            fullSchemaData: schemaData,
+            isFetchingFullSchema: false,
+            availableDatabases: databases, // Set derived state
+            tables: selectedDbTables,       // Set derived state
+            tableSchemas: selectedDbSchemas, // Set derived state
+            fullSchemaError: null, // Clear error on success
+          });
+
         } catch (error: any) {
-          console.error("Failed to fetch databases:", error);
-          set({ schemaError: error.message || 'An unknown error occurred', isLoadingSchema: false });
+          console.error("Failed to fetch full schema:", error);
+          set({ fullSchemaError: error.message || 'An unknown error occurred', isFetchingFullSchema: false });
         }
       },
 
       setSelectedDatabase: (dbName) => {
+        const fullSchema = get().fullSchemaData;
+        let selectedDbTables: TableEntry[] = [];
+        let selectedDbSchemas: Record<string, TableSchema> = {};
+
+        if (dbName && fullSchema) {
+          const dbSchema = fullSchema.databases.find(db => db.name === dbName);
+          if (dbSchema) {
+            selectedDbTables = dbSchema.tables.map(t => ({ name: t.table_name /*, table_type: t.table_type */ }));
+            selectedDbSchemas = dbSchema.tables.reduce((acc, schema) => {
+              acc[schema.table_name] = schema;
+              return acc;
+            }, {} as Record<string, TableSchema>);
+          }
+        }
+
         set({
           selectedDatabase: dbName,
-          tables: [], // Clear tables when DB changes
-          tableSchemas: {}, // Clear schema cache
-          currentQuery: `SELECT * FROM ...;`, // Reset query
-          queryResult: null, // Clear results
-          queryError: null, // Clear errors
+          tables: selectedDbTables,
+          tableSchemas: selectedDbSchemas,
+          // Reset query/results when DB changes?
+          // currentQuery: `SELECT * FROM ...;`,
+          // queryResult: null,
+          // queryError: null,
         });
-        if (dbName) {
-          get().fetchTablesForSelectedDB(); // Fetch tables for the new DB
-        }
+        // No need to call fetch actions anymore
       },
-
-      fetchTablesForSelectedDB: async () => {
-        const dbName = get().selectedDatabase;
-        const token = get().authToken;
-        console.log(`fetchTablesForSelectedDB: ${dbName}`);
-
-        if (!dbName) {
-          // Don't treat this as an error, just nothing to fetch
-          set({ tables: [] }); // Clear tables if no DB selected
-          return;
-        }
-        if (!token) {
-          set({ schemaError: 'Authentication token is missing.', isLoadingSchema: false, tables: [] });
-          return;
-        }
-
-        set({ isLoadingSchema: true, schemaError: null });
-        try {
-          console.log(`url: ${API_BASE_URL}/api/databases/${dbName}/tables`);
-          const response = await fetch(`${API_BASE_URL}/api/databases/${dbName}/tables`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
-            throw new Error(errorData.message || `Failed to fetch tables for ${dbName}. Status: ${response.status}`);
-          }
-          // Assuming backend returns { tables: TableEntry[] }
-          const data: TableEntry[] = await response.json();
-          console.log(`tables: ${JSON.stringify(data)}`);
-          set({ tables: data, isLoadingSchema: false });
-        } catch (error: any) {
-          console.error("Failed to fetch tables:", error);
-          set({ schemaError: error.message || 'An unknown error occurred', isLoadingSchema: false, tables: [] });
-        }
-      },
-
-      fetchSchemaForTable: async (tableName: string) => {
-        const dbName = get().selectedDatabase;
-        const token = get().authToken;
-
-        if (!dbName || !tableName) {
-          console.warn('fetchSchemaForTable called without dbName or tableName');
-          return;
-        }
-        if (!token) {
-          set({ schemaError: 'Authentication token is missing.', isLoadingSchema: false });
-          return;
-        }
-
-        // Avoid refetching if already cached (using tableSchemas with tableName key)
-        if (get().tableSchemas[tableName]) {
-          console.log(`Schema for ${tableName} already cached.`);
-          return;
-        }
-
-        set({ isLoadingSchema: true, schemaError: null });
-        try {
-          // Prepend base URL
-          const response = await fetch(`${API_BASE_URL}/api/databases/${encodeURIComponent(dbName)}/tables/${encodeURIComponent(tableName)}/schema`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
-            throw new Error(errorData.message || `Failed to fetch schema for ${tableName}. Status: ${response.status}`);
-          }
-          // Assuming backend returns TableSchema directly
-          const schemaData: TableSchema = await response.json();
-          set((state) => ({
-            tableSchemas: { ...state.tableSchemas, [tableName]: schemaData }, // Use tableName as key
-            isLoadingSchema: false,
-          }));
-        } catch (error: any) {
-          console.error(`Failed to fetch schema for ${tableName}:`, error);
-          set({ schemaError: error.message || 'An unknown error occurred', isLoadingSchema: false });
-        }
-      },
+      // --- END REFACTOR ---
 
       // Query
       setCurrentQuery: (query: string) => set({ currentQuery: query }),
@@ -548,33 +542,40 @@ export const useAppStore = create<AppState>()(
           const newTab = createNewTab();
           set({ tabs: [newTab], activeTabId: newTab.id });
         }
+        // Fetch schema if token exists
+        if (get().authToken) {
+          get().fetchFullSchema();
+        }
       },
     }),
     {
-      name: 'AppStorePersistence', // Name for the persisted storage
-      storage: createJSONStorage(() => localStorage), // Use localStorage
-      // Only persist parts of the state
+      name: 'AppStorePersistence',
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         authToken: state.authToken,
-        // Persist tabs - BE CAREFUL with large results potentially stored here!
-        // Consider omitting result/error from persisted state or capping size.
-        tabs: state.tabs.map(tab => ({ ...tab, result: null, error: null, isRunning: false })), // Don't persist results/errors/running state
+        tabs: state.tabs.map(tab => ({ ...tab, result: null, error: null, isRunning: false })),
         activeTabId: state.activeTabId,
-        availableDatabases: state.availableDatabases, // Persist DB list
-        selectedDatabase: state.selectedDatabase, // Persist selected DB
+        // Persist selected DB, but not the full schema (fetch on load)
+        selectedDatabase: state.selectedDatabase,
         layoutSizes: state.layoutSizes,
         collapsedPanels: state.collapsedPanels,
-        // Persist chart config
         chartConfig: state.chartConfig,
+        // Do not persist fullSchemaData, errors, loading states
       }),
+      onRehydrateStorage: () => {
+        console.log("Hydration finished.");
+        return (_state, error) => {
+          if (error) {
+            console.error("An error happened during hydration", error);
+          } else {
+            // Run init logic after hydration
+            useAppStore.getState().init();
+          }
+        };
+      },
     }
   )
   ));
-
-// Call init after the store is created and potentially rehydrated
-// Zustand doesn't have a built-in post-hydration hook easily accessible outside
-// onRehydrateStorage is the best place, called above.
-// useAppStore.getState().init(); // Don't call here, call within onRehydrateStorage
 
 // Helper function to get the state of the currently active tab
 export const useActiveTabData = () => {
