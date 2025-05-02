@@ -21,3 +21,14 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZ
 ### Get full schema
 GET http://localhost:{{port}}/api/schema
 Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M
+
+
+### Execute query
+POST http://localhost:{{port}}/api/execute-query
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M
+Content-Type: application/json
+
+{
+  "db_name": "users",
+  "query": "SELECT * FROM public.repositories"
+}

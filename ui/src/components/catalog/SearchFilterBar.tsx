@@ -3,16 +3,19 @@ import { Input } from "@/components/ui/input"; // Correct path for shadcn/ui
 import { Button } from "@/components/ui/button"; // Import Button
 import { RefreshCw } from "lucide-react"; // Import Refresh icon
 import debounce from 'lodash.debounce';
-import { useAppStore } from '@/store/useAppStore'; // Import store to get loading state
 
 interface SearchFilterBarProps {
   onSearchChange: (term: string) => void;
   placeholder?: string;
+  onRefresh: () => void;
+  isLoading: boolean;
 }
 
 export function SearchFilterBar({
   onSearchChange,
   placeholder = "Search...",
+  onRefresh,
+  isLoading
 }: SearchFilterBarProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -47,8 +50,8 @@ export function SearchFilterBar({
         className="flex-grow"
       />
       {/* Refresh Button */}
-      <Button variant="outline" size="icon">
-        <RefreshCw className="h-4 w-4 animate-spin" />
+      <Button variant="outline" size="icon" onClick={onRefresh} disabled={isLoading} title="Refresh Schema">
+        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
       </Button>
     </div>
   );

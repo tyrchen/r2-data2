@@ -48,7 +48,7 @@ export function QueryHistoryPanel({ children }: QueryHistoryPanelProps) {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground italic">No query history yet.</p>
+              <p className="text-sm text-muted-foreground italic text-center pt-4">History is empty.</p>
             )}
           </div>
         </ScrollArea>

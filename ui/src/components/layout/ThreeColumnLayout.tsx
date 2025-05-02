@@ -56,24 +56,19 @@ export function ThreeColumnLayout({
       onLayout={handleHorizontalLayout}
       id={HORIZONTAL_GROUP_ID}
     >
-      {/* Column 1: Toolbox */}
+      {/* Column 1: Toolbox - Fixed Size */}
       <ResizablePanel
-        defaultSize={horizontalSizes ? horizontalSizes[0] : 15}
-        minSize={5}
-        maxSize={20}
-        collapsible
-        collapsedSize={3}
-        onCollapse={() => {
-          if (!isToolboxCollapsed) togglePanelCollapse(TOOLBOX_PANEL_ID);
-        }}
-        onExpand={() => {
-          if (isToolboxCollapsed) togglePanelCollapse(TOOLBOX_PANEL_ID);
-        }}
-        className={`transition-all duration-300 ease-in-out ${isToolboxCollapsed ? "min-w-[40px]" : ""}`}
+        defaultSize={3} // Reduced size
+        minSize={3}     // Reduced size
+        maxSize={3}     // Reduced size
+        collapsible={false} // Disable collapse
+        className="p-1" // Padding applied here
         id={TOOLBOX_PANEL_ID}
         order={1}
       >
-        <div className="flex h-full items-start justify-center p-1">
+        {/* Remove collapse button logic, render toolbox directly */}
+        {toolbox}
+        {/* <div className="flex h-full items-start justify-center p-1">
           {isToolboxCollapsed ? (
             <Button variant="ghost" size="icon" onClick={() => togglePanelCollapse(TOOLBOX_PANEL_ID)}>
               <PanelRightOpen className="h-4 w-4" />
@@ -86,7 +81,7 @@ export function ThreeColumnLayout({
               </Button>
             </>
           )}
-        </div>
+        </div> */}
       </ResizablePanel>
       <ResizableHandle withHandle />
 

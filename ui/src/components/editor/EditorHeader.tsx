@@ -60,6 +60,7 @@ export function EditorHeader() {
         </Button>
         {/* Execute Button */}
         <Button
+          variant="outline"
           onClick={handleExecuteQuery} // Use specific handler
           disabled={isQueryRunning || !selectedDatabase || !currentQuery}
           size="sm"

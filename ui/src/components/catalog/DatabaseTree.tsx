@@ -30,6 +30,7 @@ interface TreeNode {
   type: 'database' | 'table' | 'column';
   data?: any; // Store original data (db, table, column info)
   children?: TreeNode[];
+  matchesFilter?: boolean; // Indicates if node or descendant matches
 }
 
 interface DatabaseTreeProps {
@@ -89,43 +90,63 @@ const buildTreeNodes = (
 
 // Helper to filter tree nodes
 const filterTree = (nodes: TreeNode[], term: string): TreeNode[] => {
-  if (!term) return nodes;
   const lowerTerm = term.toLowerCase();
 
-  const filterNode = (node: TreeNode): TreeNode | null => {
+  const checkAndMark = (node: TreeNode): boolean => {
     const nameMatch = node.name.toLowerCase().includes(lowerTerm);
+    let descendantMatch = false;
 
-    let filteredChildren: TreeNode[] = [];
     if (node.children) {
-      filteredChildren = node.children
-        .map(filterNode)
-        .filter((child): child is TreeNode => child !== null);
+      // Recursively check children and update descendantMatch
+      descendantMatch = node.children.reduce((acc, child) => {
+        return checkAndMark(child) || acc;
+      }, false);
     }
 
-    // Keep the node if its name matches OR it has matching children
-    if (nameMatch || filteredChildren.length > 0) {
-      return {
-        ...node,
-        children: filteredChildren.length > 0 ? filteredChildren : undefined, // Only include children if they exist
-      };
-    }
-
-    return null;
+    node.matchesFilter = nameMatch || descendantMatch;
+    return node.matchesFilter;
   };
 
-  return nodes.map(filterNode).filter((node): node is TreeNode => node !== null);
+  // First pass: mark all nodes that match or have matching descendants
+  nodes.forEach(checkAndMark);
+
+  // Second pass: filter out nodes that don't match and have no matching descendants
+  const filterVisible = (node: TreeNode): TreeNode | null => {
+    if (!node.matchesFilter) {
+      return null;
+    }
+    // If node matches, filter its children
+    let visibleChildren: TreeNode[] = [];
+    if (node.children) {
+      visibleChildren = node.children
+        .map(filterVisible)
+        .filter((child): child is TreeNode => child !== null);
+    }
+    // Return the node with potentially filtered children
+    return {
+      ...node,
+      children: visibleChildren.length > 0 ? visibleChildren : undefined,
+    };
+  };
+
+  return nodes.map(filterVisible).filter((node): node is TreeNode => node !== null);
 };
 
 // TreeNode Component for rendering individual nodes
-// Re-add TreeNodeItemProps and React.memo
 interface TreeNodeItemProps {
   node: TreeNode;
   level: number;
-  selectedDatabase: string | null; // Pass selected DB as prop
+  selectedDatabase: string | null;
+  isExpanded: boolean; // Receive expanded state from parent
+  onToggleExpand: (nodeId: string) => void; // Callback to toggle expansion
 }
-const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({ node, level, selectedDatabase }) => {
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  // Only subscribe to the action, not the selectedDatabase state itself
+const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({
+  node,
+  level,
+  selectedDatabase,
+  isExpanded, // Use passed prop
+  onToggleExpand // Use passed callback
+}) => {
   const setSelectedDatabase = useAppStore((state) => state.setSelectedDatabase);
   // We don't need tableSchemas here anymore, can rely on node.children presence
   // const tableSchemas = useAppStore((state) => state.tableSchemas);
@@ -147,23 +168,24 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({ node, level, sel
   */
 
   const handleExpandToggle = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (node.type === 'database') {
-      setSelectedDatabase(node.name); // Action call is fine
-    }
-    // Rely only on presence of children now for tables
-    if (hasChildren) {
-      setIsExpanded(!isExpanded);
-    }
+    event.stopPropagation(); // Prevent event bubbling
+    // Always toggle expansion when chevron is clicked for expandable nodes
+    onToggleExpand(node.id);
   };
 
-  const handleNodeClick = () => {
+  const handleNodeClick = (event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering handlers on parent elements if nested
+
     if (node.type === 'database') {
-      setSelectedDatabase(node.name); // Action call is fine
-      if (hasChildren) setIsExpanded(true);
-    } else if (node.type === 'table') {
+      setSelectedDatabase(node.name);
+      // Toggle only if it has children
       if (hasChildren) {
-        setIsExpanded(true);
+        onToggleExpand(node.id);
+      }
+    } else if (node.type === 'table') {
+      // Toggle only if it has children
+      if (hasChildren) {
+        onToggleExpand(node.id);
       }
     } else if (node.type === 'column') {
       // Logic for popup can be added back later
@@ -189,53 +211,57 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({ node, level, sel
     <div>
       {/* The main row for the node itself */}
       <div
-        className={`flex items-center space-x-1 p-1 rounded hover:bg-muted ${isSelectedDb ? 'bg-muted' : ''}`}
+        // Ensure outer div doesn't accidentally handle clicks meant for children
+        // onClick={handleNodeClick} // REMOVED - Clicks handled by specific elements below
+        className={`flex items-center space-x-1 p-2 rounded hover:bg-muted ${isSelectedDb ? 'bg-muted' : ''}`}
         style={{ paddingLeft: `${indent}px` }}
       >
         {/* Expand/Collapse Chevron */}
         {isExpandable ? (
           <span
-            onClick={handleExpandToggle}
-            className="w-4 h-4 flex items-center justify-center cursor-pointer"
+            onClick={handleExpandToggle} // Chevron click only toggles expand
+            className="w-4 h-4 flex items-center justify-center cursor-pointer mr-1" // Added mr-1
           >
-            {hasChildren ? ( // Only rely on actual children for chevron
+            {hasChildren ? (
               isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
             ) : (
-              <span className="w-4"></span> // Placeholder if no children
+              <span className="w-4"></span>
             )}
           </span>
         ) : (
-          <span className="w-4"></span> // Indent non-expandable
+          <span className="w-4 mr-1"></span> // Add mr-1 for alignment
         )}
 
-        {/* Icon */}
-        <IconComponent size={14} className="flex-shrink-0 text-muted-foreground mr-1" />
+        {/* Icon with added margin */}
+        <IconComponent size={14} className="flex-shrink-0 text-muted-foreground mr-1.5" />
 
-        {/* Node Name (conditionally rendered span) */}
-        {/* Removed FieldDetailPopup wrapper, removed cursor-grab */}
+        {/* Node Name spans - Attach click handler here */}
         {node.type === 'column' ? (
-          <span ref={combinedRef} className="text-sm truncate flex-grow cursor-default" onClick={handleNodeClick}>
+          <span ref={combinedRef} className="text truncate flex-grow cursor-default" onClick={handleNodeClick}>
             {node.name}
-          </span>
-        ) : node.type === 'table' ? (
-          <span ref={combinedRef} className="text-sm truncate flex-grow cursor-default" onClick={handleNodeClick}>
-            {node.name}
+            {/* Icons directly after column name */}
+            <span className="inline-flex items-center ml-1.5 space-x-1">
+              {columnData?.is_pk && (
+                <Key size={12} className="flex-shrink-0 text-yellow-500" />
+              )}
+              {columnData?.fk_table && (
+                <LinkIcon size={12} className="flex-shrink-0 text-blue-500" />
+              )}
+            </span>
           </span>
         ) : (
-          <span className="text-sm truncate flex-grow cursor-pointer" onClick={handleNodeClick}>
+          // Table or Database Name - Attaching click handler here
+          <span
+            ref={combinedRef} // Attach ref here if needed (though drag is commented out)
+            className={`text truncate flex-grow ${isExpandable ? 'cursor-pointer' : 'cursor-default'}`}
+            onClick={handleNodeClick} // Handle node click (select DB, toggle expand)
+          >
             {node.name}
           </span>
         )}
 
-        {/* PK/FK Icons - Tooltips removed for debugging */}
-        <div className="ml-auto flex items-center space-x-1 pr-1">
-          {columnData?.is_pk && (
-            <Key size={12} className="flex-shrink-0 text-yellow-500" />
-          )}
-          {columnData?.fk_table && (
-            <LinkIcon size={12} className="flex-shrink-0 text-blue-500" />
-          )}
-        </div>
+        {/* Spacer removed as icons are inline now for columns */}
+        {/* {node.type !== 'column' && <div className="ml-auto"></div>} */}
       </div>
 
       {/* Render Children if Expanded */}
@@ -243,7 +269,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({ node, level, sel
         <div className="ml-0">
           {node.children?.map((child) => (
             // Pass selectedDatabase prop down
-            <TreeNodeItem key={child.id} node={child} level={level + 1} selectedDatabase={selectedDatabase} />
+            <TreeNodeItem key={child.id} node={child} level={level + 1} selectedDatabase={selectedDatabase} isExpanded={isExpanded} onToggleExpand={onToggleExpand} />
           ))}
         </div>
       )}
@@ -260,16 +286,53 @@ export function DatabaseTree({ filterTerm }: DatabaseTreeProps) {
   const isLoadingFullSchema = useAppStore((state) => state.isFetchingFullSchema);
   const fullSchemaError = useAppStore((state) => state.fullSchemaError);
 
-  // Memoize tree building and filtering
+  // State for expanded node IDs
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
+
+  const handleToggleExpand = (nodeId: string) => {
+    setExpandedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(nodeId)) {
+        newSet.delete(nodeId);
+      } else {
+        newSet.add(nodeId);
+      }
+      return newSet;
+    });
+  };
+
+  // Memoize tree building
   const treeNodes = React.useMemo(() => {
     const dbSchemas = fullSchemaData?.databases || [];
     return buildTreeNodes(dbSchemas, selectedDatabase);
   }, [fullSchemaData, selectedDatabase]);
 
-  const filteredNodes = React.useMemo(() =>
-    filterTree(treeNodes, filterTerm),
-    [treeNodes, filterTerm]
-  );
+  // Memoize filtering and update expanded nodes on filter change
+  const filteredNodes = React.useMemo(() => {
+    const filtered = filterTree(treeNodes, filterTerm);
+
+    // If filter is active, auto-expand matches
+    if (filterTerm) {
+      const newExpanded = new Set<string>();
+      const collectExpanded = (nodes: TreeNode[]) => {
+        nodes.forEach(node => {
+          if (node.matchesFilter) {
+            newExpanded.add(node.id);
+            if (node.children) {
+              collectExpanded(node.children);
+            }
+          }
+        });
+      };
+      collectExpanded(filtered); // Use the already filtered tree
+      setExpandedIds(newExpanded);
+    } else {
+      // Optionally reset expansion when filter is cleared, or keep state
+      // setExpandedIds(new Set());
+    }
+
+    return filtered;
+  }, [treeNodes, filterTerm]);
 
   // Loading/Error states remain the same
   if (isLoadingFullSchema && !fullSchemaData) {
@@ -290,8 +353,15 @@ export function DatabaseTree({ filterTerm }: DatabaseTreeProps) {
     <TooltipProvider delayDuration={300}>
       <div className="p-1">
         {filteredNodes.map((node) => (
-          // Pass selectedDatabase prop
-          <TreeNodeItem key={node.id} node={node} level={0} selectedDatabase={selectedDatabase} />
+          <TreeNodeItem
+            key={node.id}
+            node={node}
+            level={0}
+            selectedDatabase={selectedDatabase}
+            // Pass down expanded state and toggle handler
+            isExpanded={expandedIds.has(node.id)}
+            onToggleExpand={handleToggleExpand}
+          />
         ))}
       </div>
     </TooltipProvider>

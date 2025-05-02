@@ -2,8 +2,6 @@
 import { SqlMonacoEditor } from '@sqlrooms/sql-editor';
 import { TableColumn, DataTable } from '@sqlrooms/duckdb';
 import { useAppStore, useActiveTabData } from '@/store/useAppStore';
-// import { Button } from '@/components/ui/button'; // No longer needed here
-import { QueryHistory } from './QueryHistory';
 import React, { useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
@@ -110,26 +108,16 @@ export function SqlEditor() {
           tableSchemas={editorSchemaArray} // Pass schemas (assuming this is correct)
           height="300px" // Let flexbox handle height
           onMount={handleEditorDidMount} // Capture editor instance
+          options={{
+            fontSize: 18, // Set font size
+            minimap: { enabled: false } // Optionally disable minimap
+          }}
         // Ensure editor uses available space
         // Consider adding options like language based on selected DB type
         // language={dbType === 'postgres' ? 'pgsql' : 'sql'}
         />
       </div>
-      {/* Query History Area */}
-      {/* Keep QueryHistory or move it elsewhere if needed */}
-      <div className="flex-shrink-0 border-t">
-        <QueryHistory />
-      </div>
-      {/* Remove Button area */}
-      {/* <div className="flex-shrink-0 p-1 border-t mt-1 flex justify-end">
-        <Button variant="destructive"
-          onClick={executeQuery}
-          disabled={isQueryRunning || !selectedDatabase}
-          size="lg"
-        >
-          {isQueryRunning ? 'Running...' : 'Execute Query'}
-        </Button>
-      </div> */}
+
     </div>
   );
 }

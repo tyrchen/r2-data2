@@ -28,7 +28,7 @@ const ActionItem = forwardRef<
           <button
             ref={ref} // Forward the ref to the button element
             onClick={onClick}
-            className="flex flex-col items-center justify-center p-2 space-y-1 rounded hover:bg-accent w-full text-xs"
+            className="flex items-center justify-center p-1.5 rounded hover:bg-accent w-full text-xs"
             aria-label={label} // Add aria-label for accessibility
           >
             <Icon className="h-5 w-5 text-muted-foreground" />
@@ -36,7 +36,7 @@ const ActionItem = forwardRef<
             {/* <span className="text-muted-foreground">{label}</span> */}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right">
+        <TooltipContent side="right" sideOffset={5}>
           <p>{label}</p>
         </TooltipContent>
       </Tooltip>
@@ -51,25 +51,29 @@ export function ToolboxSidebar() {
   const handleSettings = () => console.log('Settings clicked');
 
   return (
-    <div className="h-full flex flex-col items-center p-1 space-y-2 bg-muted/40">
-      {/* Wrap Save ActionItem with SaveQueryDialog */}
-      <SaveQueryDialog>
-        {/* Pass the ActionItem as the child trigger */}
-        <ActionItem icon={Save} label="Save Query" />
-        {/* onClick is handled by DialogTrigger now */}
-      </SaveQueryDialog>
+    <div className="h-full flex flex-col items-center justify-between p-1 bg-muted/40">
+      {/* Group top icons */}
+      <div className="w-full space-y-1">
+        {/* Wrap Save ActionItem with SaveQueryDialog */}
+        <SaveQueryDialog>
+          {/* Pass the ActionItem as the child trigger */}
+          <ActionItem icon={Save} label="Save Query" />
+          {/* onClick is handled by DialogTrigger now */}
+        </SaveQueryDialog>
 
-      {/* Wrap History ActionItem with QueryHistoryPanel */}
-      <QueryHistoryPanel>
-        {/* Pass the ActionItem as the child trigger */}
-        <ActionItem icon={History} label="Query History" />
-        {/* onClick is handled by SheetTrigger now */}
-      </QueryHistoryPanel>
+        {/* Wrap History ActionItem with QueryHistoryPanel */}
+        <QueryHistoryPanel>
+          {/* Pass the ActionItem as the child trigger */}
+          <ActionItem icon={History} label="Query History" />
+          {/* onClick is handled by SheetTrigger now */}
+        </QueryHistoryPanel>
+      </div>
 
+      {/* Settings icon at the bottom */}
       <ActionItem icon={Settings} label="Settings" onClick={handleSettings} />
 
       {/* Add User controls/spacer at the bottom if needed */}
-      <div className="mt-auto">{/* Spacer */}</div>
+      {/* <div className="mt-auto"> Spacer </div> */}
     </div>
   );
 }

@@ -19,3 +19,9 @@ I've manually moved those docs to ./.cursor/memory. based on your study, update 
 Enter implement mode, pick up next task
 
 For the catalog browser, please use shadcn sidebar and put search filter and refresh into it. Then build a custom tree yourself like the attached image
+
+
+Now it works! There're several UI improvements to be made:
+1. Toolbox sidebar: remove the tooggle button. And make the tool button group take whole height. The toolbox sidebar should not be resizeable. Make the tooltip more elegant.
+2. Catalog side bar: should the whole thing to be wrapped by a shadcn sidebar (already installed). And also add proper margin to make the view more element. The refresh button shouldn't spin unless it is refreshing, make sure the state is correct.
+3. main query panel: add proper padding/margin to make the view more elegant. Remove "No query history yet", remove "Result viewer".

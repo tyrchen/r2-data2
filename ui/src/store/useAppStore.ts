@@ -350,7 +350,7 @@ export const useAppStore = create<AppState>()(
           console.warn('addQueryToHistory action not found in store');
         }
 
-
+        console.log(`Executing query on ${dbName}: ${query}`);
         try {
           // Prepend base URL
           const response = await fetch(`${API_BASE_URL}/api/execute-query`, {
@@ -506,6 +506,7 @@ export const useAppStore = create<AppState>()(
         // const addQueryToHistoryAction = get().addQueryToHistory;
         // if (addQueryToHistoryAction) { addQueryToHistoryAction(query); }
 
+        console.log(`Executing query on ${dbName}: ${query}`);
         try {
           const response = await fetch(`${API_BASE_URL}/api/execute-query`, {
             method: 'POST',

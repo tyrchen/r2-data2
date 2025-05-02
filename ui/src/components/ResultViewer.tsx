@@ -143,7 +143,6 @@ export function ResultViewer() {
       <div className="flex justify-between items-center mb-2 flex-shrink-0">
         {/* Header Section */}
         <div className="flex items-center space-x-4">
-          <h3 className="text-lg font-semibold">Result Viewer</h3>
           {/* Display Stats only for SELECT results with data */}
           {data.length > 0 && !queryResult?.message && (
             <span className="text-sm text-muted-foreground">

@@ -22,14 +22,18 @@ function App() {
         catalog={<CatalogBrowser />}
         editor={
           <div className="h-full flex flex-col">
-            <QueryTabBar />
-            <EditorHeader />
-            <div className="flex-grow overflow-hidden">
+            <div className="flex-shrink-0"><QueryTabBar /></div>
+            <div className="flex-shrink-0"><EditorHeader /></div>
+            <div className="flex-grow overflow-hidden p-1">
               <SqlEditor />
             </div>
           </div>
         }
-        results={<ResultViewer />}
+        results={
+          <div className="p-1 h-full">
+            <ResultViewer />
+          </div>
+        }
       />
     </DndProvider>
   );
