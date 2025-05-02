@@ -79,3 +79,34 @@ export function aggregateData(
 }
 
 // Add other utility functions here if needed (e.g., for Pie chart formatting)
+
+// Pie Chart Label Rendering
+// NOTE: Returns string, not JSX, as this is a .ts file.
+const RADIAN = Math.PI / 180;
+interface CustomizedLabelProps {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  percent: number;
+  index: number;
+}
+export const renderCustomizedPieLabel = ({ percent }: CustomizedLabelProps): string | null => {
+  // Don't render label if percent is too small
+  if (percent < 0.02) {
+    return null;
+  }
+  return `${(percent * 100).toFixed(0)}%`;
+  // Original JSX version (requires .tsx file):
+  /*
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="10px">
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+  */
+};

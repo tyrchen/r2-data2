@@ -9,7 +9,8 @@ import {
 } from 'recharts';
 import { useAppStore } from '@/store/useAppStore'; // Import store
 import { ChartType } from './ChartTypeSelector';
-import { aggregateData, AggregationType } from '@/lib/chartUtils'; // Import aggregation utility and type
+import { aggregateData, AggregationType, renderCustomizedPieLabel } from '@/lib/chartUtils'; // Import utils
+import { CustomTooltip } from './CustomTooltip'; // Import custom tooltip
 
 // Predefined colors for multiple series/pie slices
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7f50', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc0cb'];
@@ -79,7 +80,7 @@ export function RechartsRenderer({ data, chartType }: RechartsRendererProps) {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey={xAxisKey} />
             <YAxis yAxisId="left" orientation="left" stroke={COLORS[0]} />
-            <Tooltip />
+            <Tooltip content={<CustomTooltip xAxisLabel={xAxisKey || 'X'} />} />
             <Legend />
             {yAxes.map((yAxisItem, index) => (
               <Bar
@@ -98,7 +99,7 @@ export function RechartsRenderer({ data, chartType }: RechartsRendererProps) {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey={xAxisKey} />
             <YAxis yAxisId="left" orientation="left" stroke={COLORS[0]} />
-            <Tooltip />
+            <Tooltip content={<CustomTooltip xAxisLabel={xAxisKey || 'X'} />} />
             <Legend />
             {yAxes.map((yAxisItem, index) => (
               <Line
@@ -119,7 +120,7 @@ export function RechartsRenderer({ data, chartType }: RechartsRendererProps) {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey={xAxisKey} />
             <YAxis yAxisId="left" orientation="left" stroke={COLORS[0]} />
-            <Tooltip />
+            <Tooltip content={<CustomTooltip xAxisLabel={xAxisKey || 'X'} />} />
             <Legend />
             {yAxes.map((yAxisItem, index) => (
               <Area
@@ -143,7 +144,7 @@ export function RechartsRenderer({ data, chartType }: RechartsRendererProps) {
               cx="50%"
               cy="50%"
               labelLine={false}
-              // label={renderCustomizedLabel} // TODO: Add custom label if needed
+              label={renderCustomizedPieLabel}
               outerRadius="80%" // Adjust radius as needed
               fill="#8884d8"
               dataKey={valueKey}
@@ -166,7 +167,7 @@ export function RechartsRenderer({ data, chartType }: RechartsRendererProps) {
             <XAxis type="number" dataKey={xAxisKey} name={xAxisKey} />
             {/* Simple: first Y axis only for now */}
             <YAxis type="number" dataKey={yAxes[0]} name={yAxes[0]} />
-            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip xAxisLabel={xAxisKey || 'X'} />} />
             <Legend />
             <Scatter name="Data Points" data={transformedData} fill="#8884d8">
               {/* TODO: Add ZAxis/coloring later if needed */}
