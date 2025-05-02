@@ -1,6 +1,6 @@
-import React from 'react';
-// Import useActiveTabData hook and QueryTab type
-import { useAppStore, useActiveTabData, QueryTab } from '@/store/useAppStore';
+// Removed unused React import
+// import React from 'react';
+import { useAppStore, useActiveTabData } from '@/store/useAppStore';
 import { Button } from "@/components/ui/button";
 import { Play, Database, TextQuote } from "lucide-react"; // Icons
 import { format } from 'sql-formatter'; // Import formatter

@@ -54,6 +54,7 @@ pub fn get_router(state: AppState) -> Router {
             get(handlers::get_table_schema),
         )
         .route("/execute-query", post(handlers::execute_query))
+        .route("/schema", get(handlers::get_full_schema))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

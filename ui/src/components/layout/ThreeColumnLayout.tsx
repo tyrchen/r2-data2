@@ -1,15 +1,13 @@
+import React from 'react';
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import React from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import {
   PanelLeftClose,
-  PanelRightClose,
-  PanelLeftOpen,
   PanelRightOpen,
 } from "lucide-react";
 
@@ -24,7 +22,6 @@ interface ThreeColumnLayoutProps {
 const TOOLBOX_PANEL_ID = "toolbox";
 const CATALOG_PANEL_ID = "catalog";
 const HORIZONTAL_GROUP_ID = "horizontalLayout";
-const CATALOG_VERTICAL_GROUP_ID = "catalogVerticalLayout";
 const EDITOR_VERTICAL_GROUP_ID = "editorVerticalLayout";
 
 export function ThreeColumnLayout({

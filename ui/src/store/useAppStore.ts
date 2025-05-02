@@ -564,23 +564,9 @@ export const useAppStore = create<AppState>()(
         selectedDatabase: state.selectedDatabase, // Persist selected DB
         layoutSizes: state.layoutSizes,
         collapsedPanels: state.collapsedPanels,
-        // Don't persist schema details, loading states, transient UI states
         // Persist chart config
         chartConfig: state.chartConfig,
       }),
-      // Custom function to run after rehydration
-      onRehydrateStorage: (state) => {
-        console.log("Hydration finished.");
-        return (state, error) => {
-          if (error) {
-            console.error("An error happened during hydration", error);
-          } else {
-            // Run init logic after hydration
-            // REMOVED: useAppStore.getState().init();
-            // Initialization will now be triggered from App.tsx
-          }
-        };
-      },
     }
   )
   ));

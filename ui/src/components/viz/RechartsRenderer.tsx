@@ -150,7 +150,7 @@ export function RechartsRenderer({ data, chartType }: RechartsRendererProps) {
               dataKey={valueKey}
               nameKey={labelKey}
             >
-              {transformedData.map((entry, index) => (
+              {transformedData.map((_entry, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>

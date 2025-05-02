@@ -7,7 +7,7 @@ use serde_json::json;
 use thiserror::Error;
 use tracing::warn;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum AuthError {
     #[error("Invalid token: {0}")]
     InvalidToken(String),

@@ -17,3 +17,7 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZ
 ### Get table schema
 GET http://localhost:{{port}}/api/databases/users/tables/public.repositories/schema
 Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M
+
+### Get full schema
+GET http://localhost:{{port}}/api/schema
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZXJAZXhhbXBsZS5jb20iLCJleHAiOjIwNjE1MDkyMDV9.6QRUaU0gjAhaqWdmZyq5lm9lXVTh6aspFPN-SCF_X6M

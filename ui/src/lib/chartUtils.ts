@@ -82,15 +82,15 @@ export function aggregateData(
 
 // Pie Chart Label Rendering
 // NOTE: Returns string, not JSX, as this is a .ts file.
-const RADIAN = Math.PI / 180;
+// const RADIAN = Math.PI / 180; // Removed unused
 interface CustomizedLabelProps {
-  cx: number;
-  cy: number;
-  midAngle: number;
-  innerRadius: number;
-  outerRadius: number;
+  // cx: number; // Removed unused
+  // cy: number; // Removed unused
+  // midAngle: number; // Removed unused
+  // innerRadius: number; // Removed unused
+  // outerRadius: number; // Removed unused
   percent: number;
-  index: number;
+  // index: number; // Removed unused
 }
 export const renderCustomizedPieLabel = ({ percent }: CustomizedLabelProps): string | null => {
   // Don't render label if percent is too small

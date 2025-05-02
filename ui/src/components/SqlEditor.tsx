@@ -1,10 +1,10 @@
 // Import the standalone Monaco editor component
 import { SqlMonacoEditor } from '@sqlrooms/sql-editor';
 import { TableColumn, DataTable } from '@sqlrooms/duckdb';
-import { useAppStore, AppState, ColumnInfo, useActiveTabData } from '@/store/useAppStore';
+import { useAppStore, useActiveTabData } from '@/store/useAppStore';
 // import { Button } from '@/components/ui/button'; // No longer needed here
 import { QueryHistory } from './QueryHistory';
-import React, { useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
@@ -31,7 +31,7 @@ export function SqlEditor() {
     return Object.values(allTableSchemas).map(schema => ({
       tableName: schema.table_name,
       // Map ColumnInfo to TableColumn
-      columns: schema.columns.map((col: ColumnInfo): TableColumn => ({
+      columns: schema.columns.map((col): TableColumn => ({
         name: col.name,
         type: col.data_type,
       })),
@@ -44,7 +44,7 @@ export function SqlEditor() {
   // --- Drop Target Hook ---
   const [{ canDrop, isOver }, dropRef] = useDrop(() => ({
     accept: ItemTypes.SCHEMA_ITEM,
-    drop: (item: { name: string; type: string }, monitor) => {
+    drop: (item: { name: string; type: string }) => {
       if (!editorRef.current) return;
 
       const editor = editorRef.current;

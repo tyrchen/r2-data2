@@ -1,6 +1,7 @@
-use crate::{AppConfig, DbPool, db::PoolHandler};
+use crate::{AppConfig, DbPool, db::PoolHandler, error::AppError, handlers::FullSchema};
+use moka::future::Cache;
 use papaya::HashMap;
-use std::{ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc, time::Duration};
 use tracing::info;
 
 #[derive(Clone)]
@@ -9,6 +10,8 @@ pub struct AppState(Arc<AppStateInner>);
 pub struct AppStateInner {
     pub config: AppConfig,
     pub pools: Arc<HashMap<String, DbPool>>,
+    // Cache for the full schema, storing the Result wrapped in Arc
+    pub schema_cache: Cache<String, Arc<Result<FullSchema, AppError>>>,
 }
 
 // Manual Debug implementation because sqlx Pools don't implement Debug
@@ -17,7 +20,8 @@ impl std::fmt::Debug for AppStateInner {
         f.debug_struct("AppStateInner")
             .field("config", &self.config)
             .field("db_pools_count", &self.pools.len()) // Only show count
-            .finish()
+            // Do not display the cache content
+            .finish_non_exhaustive()
     }
 }
 
@@ -50,9 +54,18 @@ impl AppState {
         }
         info!("Database connections established.");
 
+        // Create the schema cache
+        let schema_cache = Cache::builder()
+            // Time to live (TTL): 10 minutes
+            .time_to_live(Duration::from_secs(10 * 60))
+            // Max capacity (optional, e.g., only 1 entry needed)
+            .max_capacity(1)
+            .build();
+
         let inner = AppStateInner {
             config,
             pools: Arc::new(pools),
+            schema_cache,
         };
         Ok(Self(Arc::new(inner)))
     }

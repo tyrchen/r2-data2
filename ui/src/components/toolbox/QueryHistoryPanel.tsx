@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAppStore } from '@/store/useAppStore';
 import {
   Sheet,
   SheetContent,
@@ -6,10 +7,8 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose,
 } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { useAppStore } from '@/store/useAppStore';
+// import { Button } from "@/components/ui/button"; // Removed unused
 import { ScrollArea } from "@/components/ui/scroll-area"; // Use ScrollArea for long history
 
 interface QueryHistoryPanelProps {

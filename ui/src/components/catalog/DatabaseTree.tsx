@@ -8,7 +8,7 @@ import {
   Key,
   Link as LinkIcon,
 } from 'lucide-react';
-import { useAppStore, TableSchema, ColumnInfo } from '@/store/useAppStore';
+import { useAppStore, ColumnInfo } from '@/store/useAppStore';
 import {
   Tooltip,
   TooltipContent,
@@ -110,7 +110,6 @@ const filterTree = (nodes: TreeNode[], term: string): TreeNode[] => {
 // TreeNode Component for rendering individual nodes
 const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const [activePopupColumnId, setActivePopupColumnId] = React.useState<string | null>(null);
   const { fetchSchemaForTable, setSelectedDatabase, selectedDatabase } = useAppStore((state) => ({
     fetchSchemaForTable: state.fetchSchemaForTable,
     setSelectedDatabase: state.setSelectedDatabase,

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input"; // For inline renaming
 import { Plus, X } from "lucide-react";

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAppStore, AppState, QueryResultData, useActiveTabData } from '@/store/useAppStore';
+import { useAppStore, useActiveTabData } from '@/store/useAppStore';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/ui/data-table"; // Import the new DataTable
@@ -52,8 +52,8 @@ export function ResultViewer() {
   const activeTab = useActiveTabData();
 
   // Global UI state (could be moved to tab state if needed)
-  const showVisualization = useAppStore((state: AppState) => state.showVisualization);
-  const setShowVisualization = useAppStore((state: AppState) => state.setShowVisualization);
+  const showVisualization = useAppStore((state) => state.showVisualization);
+  const setShowVisualization = useAppStore((state) => state.setShowVisualization);
   const selectedChartType = useAppStore((state) => state.selectedChartType);
   const setSelectedChartType = useAppStore((state) => state.setSelectedChartType);
 
@@ -79,12 +79,6 @@ export function ResultViewer() {
   const rowCount = data.length;
   // Placeholder for execution time - needs to be added to store/queryResult
   const executionTime = queryResult?.executionTime; // Example: Assume it exists
-
-  // Render visualization using BasicChartRenderer
-  const renderVisualization = () => {
-    // Pass the actual query result data
-    return <div className="p-4 text-center">Visualization Placeholder (Recharts)</div>;
-  };
 
   const renderContent = () => {
     if (isQueryRunning) {
