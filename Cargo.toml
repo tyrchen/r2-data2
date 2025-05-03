@@ -12,17 +12,8 @@ A web-based SQL query tool and data browser with visualization capabilities,
 built with Rust (Axum) and React (TypeScript/Vite). 95% of the code is written by AI agent.
 """
 readme = "README.md"
-categories = ["development-tools", "web-programming::web-server"]
-keywords = [
-  "sql",
-  "database",
-  "gui",
-  "axum",
-  "react",
-  "query",
-  "visualization",
-  "data-browser",
-]
+categories = ["development-tools"]
+keywords = ["sql", "database", "axum", "visualization", "data-browser"]
 include = ["ui/dist/**/*", "src/**/*", "Cargo.toml"]
 
 [dependencies]
