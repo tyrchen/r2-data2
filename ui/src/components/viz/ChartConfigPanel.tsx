@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppStore, useActiveTabData } from '@/store/useAppStore';
+import { ChartTypeSelector, ChartType } from "@/components/viz/ChartTypeSelector";
 import {
   Select,
   SelectContent,
@@ -11,15 +12,15 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const AGGREGATION_TYPES = ['none', 'sum', 'average', 'count', 'min', 'max'];
+const availableChartTypes: ChartType[] = ['bar', 'line', 'pie', 'area', 'scatter'];
 
 export function ChartConfigPanel() {
   const activeTab = useActiveTabData();
-  // Select individual state pieces
   const chartConfig = useAppStore((state) => state.chartConfig);
   const setChartConfig = useAppStore((state) => state.setChartConfig);
   const selectedChartType = useAppStore((state) => state.selectedChartType);
+  const setSelectedChartType = useAppStore((state) => state.setSelectedChartType);
 
-  // Determine available columns from the active tab's data
   const availableColumns = React.useMemo(() => {
     const data = activeTab?.result?.result;
     if (data && data.length > 0) {
@@ -27,6 +28,12 @@ export function ChartConfigPanel() {
     }
     return [];
   }, [activeTab?.result?.result]);
+
+  // --- DEBUG: Log yAxes state ---
+  React.useEffect(() => {
+    console.log("Current yAxes in ChartConfigPanel:", chartConfig.yAxes);
+  }, [chartConfig.yAxes]);
+  // --- END DEBUG ---
 
   const handleXAxisChange = (value: string) => {
     setChartConfig({ ...chartConfig, xAxis: value });
@@ -56,14 +63,28 @@ export function ChartConfigPanel() {
     setChartConfig({ ...chartConfig, valueKey: value });
   };
 
-  // Render only if there are columns to configure
   if (availableColumns.length === 0) {
-    return null; // Or a message indicating no data for configuration
+    return (
+      <div className="p-2 space-y-2 border-l w-64 flex-shrink-0">
+        <h4 className="text-sm font-bold mb-2">Chart Configuration</h4>
+        <p className="text-xs text-muted-foreground">No data to configure.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="p-2 space-y-2 border-l">
-      <h4 className="text-sm font-medium mb-2">Chart Configuration</h4>
+    <div className="p-2 space-y-2 border-l w-64 flex-shrink-0 overflow-y-auto">
+      <h4 className="text-sm font-bold mb-2">Chart Configuration</h4>
+
+      <div className="space-y-1">
+        <Label htmlFor="chart-type-select">Chart Type</Label>
+        <ChartTypeSelector
+          availableTypes={availableChartTypes}
+          selectedType={selectedChartType}
+          onTypeChange={setSelectedChartType}
+        />
+      </div>
+
       <div className="space-y-1">
         <Label htmlFor="x-axis-select">X-Axis</Label>
         <Select value={chartConfig.xAxis ?? ''} onValueChange={handleXAxisChange}>
@@ -78,10 +99,9 @@ export function ChartConfigPanel() {
         </Select>
       </div>
 
-      {/* Y Axes Selection (Checkboxes) */}
       <div className="space-y-1">
         <Label>Y-Axis / Metrics</Label>
-        <div className="space-y-1 pl-2 max-h-40 overflow-y-auto">
+        <div className="space-y-1 pl-2 max-h-60 overflow-y-auto">
           {availableColumns.map((col) => (
             <div key={`y-${col}`} className="flex items-center space-x-2">
               <Checkbox
@@ -97,7 +117,6 @@ export function ChartConfigPanel() {
         </div>
       </div>
 
-      {/* Aggregation Selection */}
       <div className="space-y-1">
         <Label htmlFor="aggregation-select">Aggregation</Label>
         <Select value={chartConfig.aggregation ?? 'none'} onValueChange={handleAggregationChange}>
@@ -112,7 +131,6 @@ export function ChartConfigPanel() {
         </Select>
       </div>
 
-      {/* Conditional Pie Chart Config */}
       {selectedChartType === 'pie' && (
         <>
           <div className="space-y-1">
@@ -143,8 +161,6 @@ export function ChartConfigPanel() {
           </div>
         </>
       )}
-
-      {/* Add more controls here (e.g., aggregation, color) */}
     </div>
   );
 }

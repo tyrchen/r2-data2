@@ -4,8 +4,12 @@ mod pg;
 use crate::{config::DatabaseConfig, error::AppError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlparser::{ast, dialect::GenericDialect, parser::Parser};
 use sqlx::{MySqlPool, PgPool};
-use std::{convert::Infallible, str::FromStr};
+use std::{cmp::min, convert::Infallible, str::FromStr, time::Duration};
+
+const DEFAULT_LIMIT: usize = 500;
+const MAX_LIMIT: usize = 5000;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -36,9 +40,70 @@ pub trait PoolHandler: Sized {
     /// Get the schema of a table
     async fn get_table_schema(&self, table_name: &str) -> Result<TableSchema, AppError>;
     /// Sanitize the query and rewrite it to CTE format
-    async fn sanitize_query(&self, query: &str) -> Result<String, AppError>;
-    /// Execute the query and return the result
-    async fn execute_query(&self, query: &str) -> Result<Value, AppError>;
+    async fn sanitize_query(&self, query: &str, limit: usize) -> Result<String, AppError> {
+        let dialect = GenericDialect {};
+        let ast = Parser::parse_sql(&dialect, query)
+            .map_err(|e| AppError::BadRequest(format!("SQL parsing error: {}", e)))?;
+        if ast.len() != 1 {
+            return Err(AppError::BadRequest(
+                "Only single SQL statements are allowed".to_string(),
+            ));
+        }
+
+        let mut stmt = ast.into_iter().next().unwrap();
+
+        let has_limit = match stmt {
+            ast::Statement::Query(ref mut query) => {
+                // Check query type
+                match &*query.body {
+                    ast::SetExpr::Select(_)
+                    | ast::SetExpr::Values(_)
+                    | ast::SetExpr::Query(_)
+                    | ast::SetExpr::Table(_) => {
+                        // Valid query type
+                    }
+                    _ => {
+                        return Err(AppError::BadRequest(
+                            "Only SELECT-like queries are allowed.".to_string(),
+                        ));
+                    }
+                }
+
+                match &mut query.limit {
+                    Some(ast::Expr::Value(ast::ValueWithSpan {
+                        value: ast::Value::Number(s, _),
+                        ..
+                    })) => {
+                        let existing_limit = s.parse::<usize>().unwrap_or(0);
+                        if existing_limit < limit {
+                            // do nothing
+                        } else {
+                            *s = min(existing_limit, MAX_LIMIT).to_string();
+                        }
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            _ => {
+                return Err(AppError::BadRequest(
+                    "Only SELECT queries are allowed".to_string(),
+                ));
+            }
+        };
+        let mut sql = stmt.to_string();
+        if !has_limit {
+            sql = format!("{} LIMIT {}", sql, limit);
+        }
+        Ok(sql)
+    }
+
+    /// Execute the query and return the result along with execution time
+    async fn execute_query(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+    ) -> Result<QueryResult, AppError>;
 }
 
 // Response structure for the /api/databases endpoint
@@ -125,6 +190,8 @@ pub enum ColumnType {
     Xml,
     // Money
     Money,
+    // Other
+    Other(String),
 }
 
 // Structures for /api/.../schema endpoint
@@ -151,6 +218,15 @@ pub struct TableSchema {
     // Optional: Add constraints, indexes later if needed
     // pub constraints: Option<Vec<ConstraintInfo>>,
     // pub indexes: Option<Vec<IndexInfo>>,
+}
+
+// Struct to hold the query result and execution time
+#[derive(Debug, Serialize)]
+pub struct QueryResult {
+    pub data: Value,
+    pub execution_time: Duration,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<Value>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -203,6 +279,7 @@ impl FromStr for ColumnType {
             "money" => Ok(ColumnType::Money),
             "text" => Ok(ColumnType::Text),
             "char" => Ok(ColumnType::Char),
+            "character" => Ok(ColumnType::Char),
             "varchar" => Ok(ColumnType::Varchar),
             "character varying" => Ok(ColumnType::Varchar),
             "boolean" => Ok(ColumnType::Boolean),
@@ -226,15 +303,19 @@ impl FromStr for ColumnType {
             "numrange" => Ok(ColumnType::NumRange),
             "tsrange" => Ok(ColumnType::TsRange),
             "tstzrange" => Ok(ColumnType::TstzRange),
+            "date" => Ok(ColumnType::Date),
+            "datetime" => Ok(ColumnType::Timestamp),
+            "time" => Ok(ColumnType::Time),
+            "timestamp" => Ok(ColumnType::Timestamp),
+            "timestamp with time zone" => Ok(ColumnType::TimestampTz),
+            "interval" => Ok(ColumnType::Interval),
             "daterange" => Ok(ColumnType::DateRange),
             "bit" => Ok(ColumnType::Bit),
             "varbit" => Ok(ColumnType::Varbit),
             "tsvector" => Ok(ColumnType::TsVector),
             "tsquery" => Ok(ColumnType::TsQuery),
             "xml" => Ok(ColumnType::Xml),
-            v => {
-                unreachable!("unsupported type: {}", v)
-            }
+            v => Ok(ColumnType::Other(v.to_string())),
         }
     }
 }
@@ -298,34 +379,21 @@ impl PoolHandler for DbPool {
         }
     }
 
-    async fn sanitize_query(&self, query: &str) -> Result<String, AppError> {
+    async fn sanitize_query(&self, query: &str, limit: usize) -> Result<String, AppError> {
         match self {
-            DbPool::Postgres(pg_pool) => pg_pool.sanitize_query(query).await,
-            DbPool::MySql(mysql_pool) => mysql_pool.sanitize_query(query).await,
+            DbPool::Postgres(pg_pool) => pg_pool.sanitize_query(query, limit).await,
+            DbPool::MySql(mysql_pool) => mysql_pool.sanitize_query(query, limit).await,
         }
     }
 
-    async fn execute_query(&self, query: &str) -> Result<Value, AppError> {
-        let result = match self {
-            DbPool::Postgres(pg_pool) => pg_pool.execute_query(query).await?,
-            DbPool::MySql(mysql_pool) => mysql_pool.execute_query(query).await?,
-        };
-
-        match result {
-            Value::Array(data) if data.len() == 1 => match data.into_iter().next().unwrap() {
-                Value::Object(data) if data.contains_key("data") && data.len() == 1 => {
-                    Ok(data.into_values().next().unwrap())
-                }
-                v => {
-                    let s =
-                        serde_json::to_string(&v).unwrap_or_else(|_| "Invalid JSON".to_string());
-                    Err(AppError::InvalidQueryResult(s))
-                }
-            },
-            v => {
-                let s = serde_json::to_string(&v).unwrap_or_else(|_| "Invalid JSON".to_string());
-                Err(AppError::InvalidQueryResult(s))
-            }
+    async fn execute_query(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+    ) -> Result<QueryResult, AppError> {
+        match self {
+            DbPool::Postgres(pg_pool) => pg_pool.execute_query(query, limit).await,
+            DbPool::MySql(mysql_pool) => mysql_pool.execute_query(query, limit).await,
         }
     }
 }

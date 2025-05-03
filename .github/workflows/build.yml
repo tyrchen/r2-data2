@@ -19,19 +19,20 @@ jobs:
       matrix:
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
-    # services:
-    #   postgres:
-    #     image: postgres:14.5
-    #     env:
-    #       POSTGRES_PASSWORD: postgres
-    #     ports:
-    #       - 5432:5432
-    #     # Set health checks to wait until postgres has started
-    #     options: >-
-    #       --health-cmd pg_isready
-    #       --health-interval 10s
-    #       --health-timeout 5s
-    #       --health-retries 5
+    services:
+      postgres:
+        image: postgres:14.5
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,11 +42,19 @@ jobs:
         run: rustup toolchain install stable --component llvm-tools-preview
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-      - name: install nextest
-        uses: taiki-e/install-action@nextest
-      - uses: Swatinem/rust-cache@v2
       # - name: Install Protoc
       #   uses: arduino/setup-protoc@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+      - name: Migrate database
+        run: |
+          cargo install sqlx-cli --no-default-features --features native-tls,postgres
+          make migrate
+      - name: install dependencies
+        run: cd ui && yarn
+      - name: build ui
+        run: cd ui && yarn build
       - name: Check code format
         run: cargo fmt --all -- --check
       - name: Check the package for errors
@@ -53,7 +62,13 @@ jobs:
       - name: Lint rust sources
         run: cargo clippy --all-targets --all-features --tests --benches -- -D warnings
       - name: Execute rust tests
-        run: cargo nextest run --all-features
+        run: cargo test --all-features
+        env:
+          OPENAI_API_KEY: random-key
+      - name: Run frontend lint
+        run: cd ui && yarn lint
+      - name: Run frontend tests
+        run: cd ui && yarn test
       - name: Generate a changelog
         uses: orhun/git-cliff-action@v2
         id: git-cliff

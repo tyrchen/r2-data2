@@ -1,11 +1,17 @@
 use super::{
-    ColumnInfo, ColumnType, JsonResult, PgPoolHandler, PoolHandler, TableInfo, TableSchema,
+    ColumnInfo, ColumnType, JsonResult, PgPoolHandler, PoolHandler, QueryResult, TableInfo,
+    TableSchema,
 };
-use crate::{config::DatabaseConfig, error::AppError};
+use crate::{
+    config::DatabaseConfig,
+    db::{DEFAULT_LIMIT, MAX_LIMIT},
+    error::AppError,
+};
 use serde_json::Value;
-use sqlparser::{dialect::PostgreSqlDialect, parser::Parser};
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use std::{collections::HashMap, ops::Deref, str::FromStr};
+use std::{cmp::min, collections::HashMap, ops::Deref, str::FromStr, time::Instant};
+use tracing::info;
+
 // Structs to fetch constraint information
 #[derive(sqlx::FromRow)]
 struct ConstraintInfoRow {
@@ -166,28 +172,51 @@ impl PoolHandler for PgPoolHandler {
         })
     }
 
-    async fn sanitize_query(&self, query: &str) -> Result<String, AppError> {
-        let dialect = PostgreSqlDialect {};
-        let statements = Parser::parse_sql(&dialect, query)
-            .map_err(|e| AppError::BadRequest(format!("SQL parsing error: {}", e)))?;
-        // only allow one statement
-        if statements.len() != 1 {
-            return Err(AppError::SqlParsingError(
-                "Only one statement is allowed".to_string(),
-            ));
-        }
-        let sql = statements[0].to_string();
+    async fn execute_query(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+    ) -> Result<QueryResult, AppError> {
+        // 1. Get the original, validated SQL string
+        let limit = min(limit.unwrap_or(DEFAULT_LIMIT), MAX_LIMIT);
+        let original_sql = self.sanitize_query(query, limit).await?;
+        info!("Sanitized query: {}", original_sql);
 
-        Ok(format!(
+        // 2. Execute EXPLAIN query
+        let explain_query = format!("EXPLAIN (FORMAT JSON) {}", original_sql);
+        let plan_result: Option<serde_json::Value> = sqlx::query_scalar(&explain_query)
+            .fetch_optional(&self.0)
+            .await?;
+        let plan = plan_result.and_then(|val| {
+            if let Value::Array(mut arr) = val {
+                if !arr.is_empty() {
+                    Some(arr.remove(0))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        // 3. Construct CTE query for actual data fetching using the *limited* sql
+        let cte_query = format!(
             "WITH q AS ({}) SELECT JSON_AGG(q.*) data FROM q",
-            sql
-        ))
-    }
+            original_sql
+        );
 
-    async fn execute_query(&self, query: &str) -> Result<Value, AppError> {
-        let sanitized_query = self.sanitize_query(query).await?;
-        let result: JsonResult = sqlx::query_as(&sanitized_query).fetch_one(&self.0).await?;
-        Ok(result.data)
+        // 4. Execute actual query and time it
+        let start_time = Instant::now();
+        let result: Option<JsonResult> = sqlx::query_as(&cte_query).fetch_optional(&self.0).await?;
+        let execution_time = start_time.elapsed();
+
+        let data = result.map_or(Value::Null, |jr| jr.data);
+
+        Ok(QueryResult {
+            data,
+            execution_time,
+            plan,
+        })
     }
 }
 
@@ -196,5 +225,46 @@ impl Deref for PgPoolHandler {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DatabaseType;
+
+    #[tokio::test]
+    async fn test_sanitize_query_without_limit() {
+        let db_config = get_db_config();
+        let db = PgPoolHandler::try_new(&db_config).await.unwrap();
+        let sanitized = db.sanitize_query("SELECT * FROM users", 10).await.unwrap();
+        assert_eq!(sanitized, "SELECT * FROM users LIMIT 10");
+    }
+
+    #[tokio::test]
+    async fn test_sanitize_query_with_limit() {
+        let db_config = get_db_config();
+        let db = PgPoolHandler::try_new(&db_config).await.unwrap();
+        let sanitized = db
+            .sanitize_query("SELECT * FROM users limit 1000", 10)
+            .await
+            .unwrap();
+        assert_eq!(sanitized, "SELECT * FROM users LIMIT 1000");
+    }
+
+    #[tokio::test]
+    async fn test_get_table_schema() {
+        let db_config = get_db_config();
+        let db = PgPoolHandler::try_new(&db_config).await.unwrap();
+        let schema = db.get_table_schema("users").await.unwrap();
+        assert_eq!(schema.table_name, "users");
+    }
+
+    fn get_db_config() -> DatabaseConfig {
+        DatabaseConfig {
+            name: "test".to_string(),
+            db_type: DatabaseType::Postgres,
+            conn_string: "postgres://postgres:postgres@localhost:5432/postgres".to_string(),
+        }
     }
 }

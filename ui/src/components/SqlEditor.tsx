@@ -12,23 +12,19 @@ const ItemTypes = {
 };
 
 export function SqlEditor() {
-  // Get active tab data and specific actions
+  // --- Hooks MUST be called unconditionally at the top ---
   const activeTab = useActiveTabData();
   const updateQueryInTab = useAppStore((state) => state.updateQueryInTab);
   const allTableSchemas = useAppStore((state) => state.tableSchemas); // Keep global schemas
-
-  // Guard if no active tab
-  if (!activeTab) return <div className="p-4 text-muted-foreground">No active tab selected.</div>;
-
-  const { id: activeTabId, query: currentQuery } = activeTab;
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
   // Fetch the schemas relevant to the currently selected database
-  // Note: This assumes tableSchemas in the store are keyed by simple table name
-  // and we filter/format them as needed by SqlMonacoEditor
   const editorSchemaArray: DataTable[] = React.useMemo(() => {
+    // Note: This depends on allTableSchemas which comes from the store hook above.
+    // If activeTab changed, allTableSchemas might also change via setSelectedDatabase.
+    // The dependency array correctly captures allTableSchemas.
     return Object.values(allTableSchemas).map(schema => ({
       tableName: schema.table_name,
-      // Map ColumnInfo to TableColumn
       columns: schema.columns.map((col): TableColumn => ({
         name: col.name,
         type: col.data_type,
@@ -36,31 +32,22 @@ export function SqlEditor() {
     }));
   }, [allTableSchemas]);
 
-  // Ref to hold the Monaco editor instance
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-
   // --- Drop Target Hook ---
   const [{ canDrop, isOver }, dropRef] = useDrop(() => ({
     accept: ItemTypes.SCHEMA_ITEM,
     drop: (item: { name: string; type: string }) => {
       if (!editorRef.current) return;
-
       const editor = editorRef.current;
-      const position = editor.getPosition(); // Get current cursor position or drop position
-
-      // Ideally, get drop position relative to editor view from monitor
-      // This might require more complex handling with client offsets
-      // For simplicity, we'll insert at the current cursor position
-
+      const position = editor.getPosition();
       if (position) {
         editor.executeEdits('dnd-insert', [
           {
             range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
-            text: item.name, // Insert the dragged name
+            text: item.name,
             forceMoveMarkers: true,
           },
         ]);
-        editor.focus(); // Focus editor after drop
+        editor.focus();
       }
       console.log(`Dropped: ${item.name} (${item.type})`);
     },
@@ -68,7 +55,13 @@ export function SqlEditor() {
       isOver: !!monitor.isOver(),
       canDrop: !!monitor.canDrop(),
     }),
-  }), [editorRef]); // Dependency
+  }), [editorRef]); // Dependency on editorRef is fine as it's stable
+  // --- End Hooks ---
+
+  // Guard if no active tab - Now safe to call *after* hooks
+  if (!activeTab) return <div className="p-4 text-muted-foreground">No active tab selected.</div>;
+
+  const { id: activeTabId, query: currentQuery } = activeTab;
 
   // Callback for when the editor instance is mounted
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
@@ -83,9 +76,8 @@ export function SqlEditor() {
     }
   };
 
-  const handleEditorChange = (newValue: any) => {
+  const handleEditorChange = (newValue: unknown) => {
     if (typeof newValue === 'string') {
-      // Update query in the *active* tab
       updateQueryInTab(activeTabId, newValue);
     } else {
       console.warn('Unexpected value type from SqlEditor onChange:', typeof newValue);

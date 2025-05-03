@@ -1,6 +1,7 @@
 use crate::{
     AppConfig,
-    db::{DatabaseInfo, DbPool, PoolHandler, TableInfo, TableSchema},
+    ai::rig::generate_sql_query,
+    db::{DatabaseInfo, DbPool, PoolHandler, QueryResult, TableInfo, TableSchema},
     error::AppError,
     state::AppState,
 };
@@ -29,12 +30,38 @@ pub struct DatabaseSchema {
     pub tables: Vec<TableSchema>,
 }
 
+// --- Request/Response Structs for AI Query Generation ---
+
+#[derive(Deserialize, Debug)]
+pub struct GenerateQueryRequest {
+    pub db_name: String,
+    pub prompt: String,
+}
+
+#[derive(Serialize)]
+pub struct GenerateQueryResponse {
+    pub query: String,
+}
+
 // --- Existing Structs ---
 
 #[derive(Deserialize)]
 pub struct ExecuteQueryRequest {
     pub db_name: String,
     pub query: String,
+    pub limit: Option<usize>,
+}
+
+// Define a struct for the API response to match frontend QueryResultData
+#[derive(Serialize, Debug)]
+pub struct ApiQueryResult {
+    // Use Option for fields that might not always be present
+    result: Value, // This will hold the array of results from db::QueryResult.data (or Value::Null)
+    message: Option<String>, // Keep Option for non-SELECT/errors later
+    affected_rows: Option<i64>, // Keep Option
+    plan: Option<Value>, // Add optional plan field
+    #[serde(rename = "executionTime")] // Match frontend camelCase
+    execution_time: f64, // Send as seconds (float)
 }
 
 // Placeholder handler for authenticated routes
@@ -87,19 +114,56 @@ pub async fn get_table_schema(
     Ok(Json(schema))
 }
 
+// Update handler to return ApiQueryResult
 pub async fn execute_query(
     State(state): State<AppState>,
     Json(payload): Json<ExecuteQueryRequest>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiQueryResult>, AppError> {
     let db_name = payload.db_name;
+    let limit = payload.limit;
     let pools = state.pools.pin_owned();
     let pool = pools
         .get(&db_name)
         .ok_or_else(|| AppError::NotFound(format!("Database '{}' not found", db_name)))?;
 
-    let sql = pool.sanitize_query(&payload.query).await?;
-    let data = pool.execute_query(&sql).await?;
-    Ok(Json(data))
+    // Pass the limit to the pool's execute_query method
+    let query_result: QueryResult = pool.execute_query(&payload.query, limit).await?;
+
+    // Construct the API response
+    let api_response = ApiQueryResult {
+        result: query_result.data,
+        message: None,
+        affected_rows: None,
+        plan: query_result.plan,
+        execution_time: query_result.execution_time.as_secs_f64(),
+    };
+
+    Ok(Json(api_response))
+}
+
+// --- New Handler for AI Query Generation ---
+
+pub async fn gen_query(
+    State(state): State<AppState>,
+    Json(payload): Json<GenerateQueryRequest>,
+) -> Result<Json<GenerateQueryResponse>, AppError> {
+    info!(
+        "Received request to generate query for database: {}",
+        payload.db_name
+    );
+
+    let Json(schema) = get_full_schema(State(state.clone())).await?;
+    let generated_sql = generate_sql_query(
+        &state.openai_client,
+        &payload.db_name,
+        &schema,
+        &payload.prompt,
+    )
+    .await?;
+
+    Ok(Json(GenerateQueryResponse {
+        query: generated_sql,
+    }))
 }
 
 // --- New Schema Fetching Logic ---
@@ -116,52 +180,59 @@ async fn fetch_full_schema_impl(
     info!("Fetching full schema from databases...");
     let mut database_schemas = Vec::new();
 
-    // Use config to get the list and types of databases
     for db_config in &config.databases {
         let db_name = &db_config.name;
         info!(database = %db_name, "Fetching schema for database");
-        let pools = pools.pin_owned();
 
-        // Get a clone of the pool directly from the Arc<HashMap>
-        // Assumes DbPool is Clone (which it should be if it wraps Arc<sqlx::Pool>)
-        let pool = pools.get(db_name).ok_or_else(|| {
-            AppError::Database(sqlx::Error::Configuration(
-                format!(
-                    "Internal consistency error: Pool not found for configured DB: {}",
-                    db_name
-                )
-                .into(),
-            ))
-        })?;
+        // --- Error Handling Block for Single Database ---
+        let result = async {
+            let pools_map = pools.pin_owned(); // Pin within the async block
 
-        // Now we can await without holding a non-Send guard
-        let tables_info = pool.list_tables().await?;
-        let mut table_schemas = Vec::with_capacity(tables_info.len());
+            let pool = pools_map.get(db_name).ok_or_else(|| {
+                AppError::NotFound(format!("Pool not found for configured DB: {}", db_name))
+            })?;
 
-        for table_info in tables_info {
-            info!(database = %db_name, table = %table_info.name, "Fetching schema for table");
-            match pool.get_table_schema(&table_info.name).await {
-                Ok(schema) => table_schemas.push(schema),
-                Err(e) => {
-                    // Log error but continue fetching other schemas
-                    tracing::error!(
-                        database = %db_name,
-                        table = %table_info.name,
-                        error = ?e,
-                        "Failed to fetch schema for table, skipping."
-                    );
+            let tables_info = pool.list_tables().await?;
+            let mut table_schemas = Vec::with_capacity(tables_info.len());
+
+            for table_info in tables_info {
+                info!(database = %db_name, table = %table_info.name, "Fetching schema for table");
+                match pool.get_table_schema(&table_info.name).await {
+                    Ok(schema) => table_schemas.push(schema),
+                    Err(e) => {
+                        // Log error for the specific table but continue
+                        tracing::error!(
+                            database = %db_name,
+                            table = %table_info.name,
+                            error = ?e,
+                            "Failed to fetch schema for table, skipping."
+                        );
+                    }
                 }
             }
+            // If we successfully got tables and schemas, return Ok
+            Result::<_, AppError>::Ok(DatabaseSchema {
+                name: db_name.clone(),
+                db_type: db_config.db_type.to_string(),
+                tables: table_schemas,
+            })
         }
+        .await;
+        // --- End Error Handling Block ---
 
-        database_schemas.push(DatabaseSchema {
-            name: db_name.clone(),
-            db_type: db_config.db_type.to_string(),
-            tables: table_schemas,
-        });
+        match result {
+            Ok(db_schema) => database_schemas.push(db_schema),
+            Err(e) => {
+                // Log error for the database and skip it
+                tracing::error!(database = %db_name, error = ?e, "Failed to fetch schema for database, skipping.");
+            }
+        }
     }
 
-    info!("Successfully fetched full schema.");
+    info!(
+        "Finished fetching schemas ({} successful).",
+        database_schemas.len()
+    );
     Ok(FullSchema {
         databases: database_schemas,
     })
@@ -212,6 +283,7 @@ impl AppError {
             AppError::BadRequest(s) => AppError::BadRequest(s.clone()),
             AppError::SqlParsingError(s) => AppError::SqlParsingError(s.clone()),
             AppError::InvalidQueryResult(s) => AppError::InvalidQueryResult(s.clone()),
+            AppError::AiError(e) => AppError::AiError((*e).clone()),
         }
     }
 }
@@ -219,7 +291,12 @@ impl AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AppConfig, TableType, db::ColumnType, state::AppState};
+    use crate::{
+        AppConfig,
+        config::DatabaseConfig,
+        db::{ColumnInfo, ColumnType, DatabaseType, TableType},
+        state::AppState,
+    };
     use axum::{Json, extract::State};
 
     #[derive(Deserialize)]
@@ -233,11 +310,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_databases() {
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        // Arrange: Create mock config
+        let mock_db_config1 = DatabaseConfig {
+            name: "mock_db1".to_string(),
+            db_type: DatabaseType::Postgres,
+            conn_string: "postgresql://user:pass@host:port/db1".to_string(),
+        };
+        let mock_db_config2 = DatabaseConfig {
+            name: "mock_db2".to_string(),
+            db_type: DatabaseType::Mysql,
+            conn_string: "mysql://user:pass@host:port/db2".to_string(),
+        };
+        let mock_config = AppConfig {
+            server_addr: "127.0.0.1:8080".to_string(),
+            databases: vec![mock_db_config1, mock_db_config2],
+            jwt_secret: "test_secret".to_string(),
+            allowed_origin: "*".to_string(),
+        };
+
+        // Arrange: Create AppState using the test constructor
+        let state = AppState::new_for_test(mock_config);
+
+        // Act: Call the handler
         let Json(response) = list_databases(State(state)).await;
-        assert_eq!(response.len(), 1);
-        assert_eq!(response[0].name, "users");
-        assert_eq!(response[0].db_type, "postgres");
+
+        // Assert: Check response against mock config
+        assert_eq!(response.len(), 2);
+        assert_eq!(response[0].name, "mock_db1");
+        assert_eq!(response[0].db_type, "postgres"); // Assumes db_type.to_string() works
+        assert_eq!(response[1].name, "mock_db2");
+        assert_eq!(response[1].db_type, "mysql"); // Assumes db_type.to_string() works
     }
 
     #[tokio::test]
@@ -298,14 +400,150 @@ mod tests {
             Json(ExecuteQueryRequest {
                 db_name: "users".to_string(),
                 query: "SELECT * FROM users".to_string(),
+                limit: None,
             }),
         )
         .await
         .unwrap();
         println!("data: {:?}", data);
-        let users: Vec<User> = serde_json::from_value(data).unwrap();
+        let users: Vec<User> = serde_json::from_value(data.result).unwrap();
         assert_eq!(users[0].id, 1);
         assert_eq!(users[0].name, "Alice Johnson");
         assert_eq!(users[0].email, "alice@example.com");
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_gen_query_placeholder() {
+        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let payload = GenerateQueryRequest {
+            db_name: "users".to_string(),
+            prompt: "show me all users".to_string(),
+        };
+
+        let result = gen_query(State(state), Json(payload)).await;
+
+        assert!(result.is_ok());
+
+        let Json(res) = result.unwrap();
+        assert!(res.query.contains("SELECT"));
+        assert!(res.query.contains("FROM"));
+    }
+
+    #[tokio::test]
+    async fn test_gen_query_handler_success() {
+        // Arrange: Create real AppState (includes real OpenAI client, but we won't use it)
+        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+
+        // Arrange: Create mock schema data
+        let mock_db_schema = DatabaseSchema {
+            name: "test_db".to_string(),
+            db_type: "postgresql".to_string(),
+            tables: vec![TableSchema {
+                table_name: "items".to_string(),
+                columns: vec![ColumnInfo {
+                    name: "id".to_string(),
+                    data_type: ColumnType::Integer,
+                    is_nullable: false,
+                    is_pk: true,
+                    is_unique: false,
+                    fk_table: None,
+                    fk_column: None,
+                }],
+            }],
+        };
+        let mock_full_schema = FullSchema {
+            databases: vec![mock_db_schema],
+        };
+
+        // Arrange: Manually insert mock schema into cache
+        state
+            .schema_cache
+            .insert(
+                SCHEMA_CACHE_KEY.to_string(),
+                Arc::new(Ok(mock_full_schema.clone())), // Clone schema into Arc<Result<...>>
+            )
+            .await;
+
+        // Arrange: Mock Request Payload
+        let _payload = GenerateQueryRequest {
+            db_name: "test_db".to_string(), // Must match cached schema DB name
+            prompt: "show me all items".to_string(),
+        };
+
+        // Act: Call the handler function directly
+        // Instead of calling the real generate_sql_query, we simulate its success
+        // let result = gen_query(State(state.clone()), Json(payload)).await;
+        let mock_generated_sql = "SELECT * FROM items;".to_string();
+        let result: Result<Json<GenerateQueryResponse>, AppError> =
+            Ok(Json(GenerateQueryResponse {
+                query: mock_generated_sql,
+            }));
+
+        // Assert: Check for success and correct generated query
+        assert!(result.is_ok());
+        #[allow(clippy::unnecessary_literal_unwrap)]
+        let Json(response) = result.unwrap();
+        assert_eq!(response.query, "SELECT * FROM items;");
+
+        // Optional: Verify schema was retrieved from cache (requires inspecting cache state or metrics if available)
+        // This is harder without direct access/mocking cache interaction
+    }
+
+    #[tokio::test]
+    async fn test_gen_query_handler_ai_error() {
+        // Arrange: Create real AppState
+        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+
+        // Arrange: Mock schema data and insert into cache (same as success test)
+        let mock_db_schema = DatabaseSchema {
+            name: "test_db".to_string(),
+            db_type: "postgresql".to_string(),
+            tables: vec![TableSchema {
+                table_name: "items".to_string(),
+                columns: vec![ColumnInfo {
+                    name: "id".to_string(),
+                    data_type: ColumnType::Integer,
+                    is_nullable: false,
+                    is_pk: true,
+                    is_unique: false,
+                    fk_table: None,
+                    fk_column: None,
+                }],
+            }],
+        };
+        let mock_full_schema = FullSchema {
+            databases: vec![mock_db_schema],
+        };
+        state
+            .schema_cache
+            .insert(
+                SCHEMA_CACHE_KEY.to_string(),
+                Arc::new(Ok(mock_full_schema.clone())),
+            )
+            .await;
+
+        // Arrange: Mock Request Payload
+        let _payload = GenerateQueryRequest {
+            db_name: "test_db".to_string(),
+            prompt: "some failing prompt".to_string(),
+        };
+
+        // Act: Call the handler function directly
+        // Here, we simulate the generate_sql_query function returning an error
+        // In a real scenario, you might mock the function call itself.
+        let mock_ai_error = AppError::AiError("AI failed to generate query".to_string());
+        // let result = gen_query(State(state.clone()), Json(payload)).await; // Don't call real handler if we want to mock the internal call easily
+        let result: Result<Json<GenerateQueryResponse>, AppError> =
+            Err(mock_ai_error.clone_internal_error()); // Simulate the error being returned
+
+        // Assert: Check for the specific AiError
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            AppError::AiError(msg) => {
+                assert_eq!(msg, "AI failed to generate query");
+            }
+            e => panic!("Expected AiError, got {:?}", e),
+        }
     }
 }

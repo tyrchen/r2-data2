@@ -39,6 +39,6 @@ endif
 
 $(MIGRATION_FOLDERS):
 	@$(eval DBNAME := $(notdir $(@:/=)))
-	@sqlx database reset -y -D postgres://localhost:5432/r2-data-2-$(DBNAME)  --source $@
+	@sqlx database reset -y -D postgres://postgres:postgres@localhost:5432/r2-data-2-$(DBNAME)  --source $@
 
 .PHONY: build test release update-submodule migrate $(MIGRATION_FOLDERS) ui-build run

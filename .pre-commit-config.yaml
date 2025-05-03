@@ -62,3 +62,20 @@ repos:
         language: rust
         files: \.rs$
         pass_filenames: false
+      # --- Frontend Hooks ---
+      - id: yarn-lint
+        name: yarn lint (ui)
+        description: Lint TypeScript files using ESLint.
+        entry: cd ui && yarn lint
+        language: system
+        files: \.tsx?$|\.ts?$
+        pass_filenames: false
+        working_dir: ui # Run in the ui directory
+      - id: yarn-test
+        name: yarn test (ui)
+        description: Run frontend unit tests.
+        entry: cd ui && yarn test
+        language: system
+        files: \.tsx?$|\.ts?$
+        pass_filenames: false
+        working_dir: ui # Run in the ui directory

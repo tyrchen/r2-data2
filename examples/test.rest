@@ -29,6 +29,6 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0X3VzZ
 Content-Type: application/json
 
 {
-  "db_name": "users",
-  "query": "SELECT * FROM public.repositories"
+  "db_name": "employees",
+  "query": "select * from employees.salary"
 }

@@ -1,6 +1,6 @@
 // Basic data transformation utilities for charting
 
-type DataRow = Record<string, any>;
+type DataRow = Record<string, unknown>;
 export type AggregationType = 'sum' | 'average' | 'count' | 'min' | 'max' | 'none';
 
 /**
@@ -16,7 +16,7 @@ export function aggregateData(
     return data; // Return original data if no aggregation needed
   }
 
-  const groupedData: Record<string, { groupValue: any; metrics: Record<string, number[]>; count: number }> = {};
+  const groupedData: Record<string, { groupValue: unknown; metrics: Record<string, number[]>; count: number }> = {};
 
   // Group data and collect metrics
   data.forEach(row => {
@@ -30,7 +30,14 @@ export function aggregateData(
 
     groupedData[key].count++;
     yAxes.forEach(axis => {
-      const value = parseFloat(row[axis]); // Attempt to parse as number
+      const rawValue = row[axis]; // Keep as unknown
+      let value = NaN; // Default to NaN
+      if (typeof rawValue === 'number') {
+        value = rawValue;
+      } else if (typeof rawValue === 'string') {
+        value = parseFloat(rawValue); // Parse only if it's a string
+      }
+      // Only push if parsing resulted in a valid number
       if (!isNaN(value)) {
         groupedData[key].metrics[axis].push(value);
       }
@@ -43,8 +50,10 @@ export function aggregateData(
 
     yAxes.forEach(axis => {
       const values = group.metrics[axis];
-      if (values.length === 0 && aggregation !== 'count') {
-        resultRow[axis] = null; // Or 0, depending on desired behavior
+      // Handle cases with no valid numbers, EXCEPT for average/min/max/count
+      // Currently, only 'sum' needs explicit null handling for empty set
+      if (values.length === 0 && aggregation === 'sum') {
+        resultRow[axis] = null; // Sum of empty set is arguably null/0? Let's keep null for now.
         return;
       }
 

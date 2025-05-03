@@ -1,0 +1,18 @@
+---
+source: src/ai/rig.rs
+expression: result.unwrap()
+---
+# Database: test_db
+
+## Table: users
+| Column | Type | Nullable | PK | FK |
+|---|---|---|---|---|
+| id | Other("integer") | NO | YES | NO |
+| username | Other("text") | NO | NO | NO |
+
+## Table: posts
+| Column | Type | Nullable | PK | FK |
+|---|---|---|---|---|
+| post_id | Other("integer") | NO | YES | NO |
+| user_id | Other("integer") | NO | NO | -> users.id |
+| content | Other("text") | YES | NO | NO |
