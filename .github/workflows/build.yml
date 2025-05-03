@@ -51,6 +51,8 @@ jobs:
         run: |
           cargo install sqlx-cli --no-default-features --features native-tls,postgres
           make migrate
+      - name: build ui
+        run: cd ui && yarn build
       - name: Check code format
         run: cargo fmt --all -- --check
       - name: Check the package for errors
