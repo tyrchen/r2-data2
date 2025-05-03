@@ -12,19 +12,19 @@ allowed_origin = "http://localhost:5173"
 [[databases]]
 name = "users"
 type = "postgres"
-conn_string = "postgres://localhost:5432/r2-data-2-users"
+conn_string = "postgres://postgres:postgres@localhost:5432/r2-data-2-users"
 
 [[databases]]
 name = "employees"
 type = "postgres"
-conn_string = "postgres://localhost:5432/employees"
+conn_string = "postgres://postgres:postgres@localhost:5432/employees"
 
 [[databases]]
 name = "lego"
 type = "postgres"
-conn_string = "postgres://localhost:5432/lego"
+conn_string = "postgres://postgres:postgres@localhost:5432/lego"
 
 [[databases]]
 name = "wikipedia"
 type = "postgres"
-conn_string = "postgres://localhost:5432/wikipedia"
+conn_string = "postgres://postgres:postgres@localhost:5432/wikipedia"
