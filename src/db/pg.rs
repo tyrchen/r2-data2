@@ -264,7 +264,7 @@ mod tests {
         DatabaseConfig {
             name: "test".to_string(),
             db_type: DatabaseType::Postgres,
-            conn_string: "postgres://localhost:5432/postgres".to_string(),
+            conn_string: "postgres://postgres:postgres@localhost:5432/postgres".to_string(),
         }
     }
 }
