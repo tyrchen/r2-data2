@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
-use super::{MySqlPoolHandler, PoolHandler, TableInfo, TableSchema};
+use super::{MySqlPoolHandler, PoolHandler, QueryResult, TableInfo, TableSchema};
 use crate::{config::DatabaseConfig, error::AppError};
-use serde_json::Value;
 use sqlx::{MySqlPool, mysql::MySqlPoolOptions};
 
 impl PoolHandler for MySqlPoolHandler {
@@ -43,14 +42,18 @@ impl PoolHandler for MySqlPoolHandler {
         ))
     }
 
-    async fn sanitize_query(&self, _query: &str) -> Result<String, AppError> {
+    async fn sanitize_query(&self, _query: &str, _limit: usize) -> Result<String, AppError> {
         // TODO: Implement MySQL sanitization
         Err(AppError::NotImplemented(
             "MySQL sanitize_query not yet implemented".to_string(),
         ))
     }
 
-    async fn execute_query(&self, _query: &str) -> Result<Value, AppError> {
+    async fn execute_query(
+        &self,
+        _query: &str,
+        _limit: Option<usize>,
+    ) -> Result<QueryResult, AppError> {
         // TODO: Implement MySQL execution
         Err(AppError::NotImplemented(
             "MySQL execute_query not yet implemented".to_string(),

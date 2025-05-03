@@ -14,13 +14,18 @@ import {
 } from "@/components/ui/tooltip";
 // import { FieldDetailPopup } from "./FieldDetailPopup"; // Comment out
 
+// Specific data types stored in the tree nodes
+type TreeNodeData =
+  | { type: 'database'; name: string; db_type: string }
+  | { type: 'table'; name: string }
+  | { type: 'column'; name: string; data_type: string | undefined; is_pk?: boolean; fk_table?: string | null } // Use specific fields
 
 // Interface for the tree node structure we'll build
 interface TreeNode {
   id: string;
   name: string;
   type: 'database' | 'table' | 'column';
-  data?: any; // Store original data (db, table, column info)
+  data?: TreeNodeData; // Use the specific union type
   children?: TreeNode[];
   matchesFilter?: boolean; // Indicates if node or descendant matches
 }
@@ -40,8 +45,7 @@ const buildTreeNodes = (
       id: `db-${dbSchema.name}`,
       name: dbSchema.name,
       type: 'database',
-      // Store only essential primitive data
-      data: { name: dbSchema.name, db_type: dbSchema.db_type },
+      data: { type: 'database', name: dbSchema.name, db_type: dbSchema.db_type }, // Match TreeNodeData
       children: [],
     };
 
@@ -53,21 +57,21 @@ const buildTreeNodes = (
           id: `table-${dbSchema.name}-${tableSchema.table_name}`,
           name: tableSchema.table_name,
           type: 'table',
-          // Store only essential primitive data
-          data: { name: tableSchema.table_name },
+          data: { type: 'table', name: tableSchema.table_name }, // Match TreeNodeData
           children: [],
         };
 
         // --- Column Nodes ---
         if (tableSchema.columns) {
-          tableNode.children = tableSchema.columns.map((col: ColumnInfo) => ({
+          tableNode.children = tableSchema.columns.map((col: ColumnInfo): TreeNode => ({ // Ensure return type is TreeNode
             id: `col-${dbSchema.name}-${tableSchema.table_name}-${col.name}`,
             name: col.name,
             type: 'column',
             // Store only essential primitive data + is_pk/fk_table for icons
-            data: {
+            data: { // Match TreeNodeData
+              type: 'column',
               name: col.name,
-              data_type: col.data_type,
+              data_type: col.data_type, // Assuming ColumnInfo.data_type is string | undefined
               is_pk: col.is_pk,
               fk_table: col.fk_table
             },
@@ -189,8 +193,9 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({
   if (node.type === 'database') IconComponent = Database;
   if (node.type === 'table') IconComponent = Table;
 
-  // Get column data from node.data if needed for icons
-  const columnData = node.type === 'column' ? node.data : null;
+  // Get column data from node.data if needed for icons, checking the type
+  const isColumn = node.data?.type === 'column';
+  const columnData = isColumn ? node.data : null;
 
   const indent = level * 16;
 
@@ -233,10 +238,11 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = React.memo(({
             {node.name}
             {/* Icons directly after column name */}
             <span className="inline-flex items-center ml-1.5 space-x-1">
-              {columnData?.is_pk && (
+              {/* Check columnData exists and is of type 'column' before accessing specific props */}
+              {columnData && columnData.type === 'column' && columnData.is_pk && (
                 <Key size={12} className="flex-shrink-0 text-yellow-500" />
               )}
-              {columnData?.fk_table && (
+              {columnData && columnData.type === 'column' && columnData.fk_table && (
                 <LinkIcon size={12} className="flex-shrink-0 text-blue-500" />
               )}
             </span>

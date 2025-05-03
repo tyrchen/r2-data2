@@ -1,3 +1,4 @@
+mod ai;
 mod auth;
 mod config;
 mod db;
@@ -55,6 +56,7 @@ pub fn get_router(state: AppState) -> Router {
         )
         .route("/execute-query", post(handlers::execute_query))
         .route("/schema", get(handlers::get_full_schema))
+        .route("/gen-query", post(handlers::gen_query))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

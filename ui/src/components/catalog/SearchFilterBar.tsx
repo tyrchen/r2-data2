@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input"; // Correct path for shadcn/ui
 import { Button } from "@/components/ui/button"; // Import Button
 import { RefreshCw } from "lucide-react"; // Import Refresh icon
@@ -19,21 +19,29 @@ export function SearchFilterBar({
 }: SearchFilterBarProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Debounce the callback function
-  const debouncedSearch = useCallback(
+  // Use useRef to hold the debounced function to avoid dependency issues
+  const debouncedSearchRef = useRef(
     debounce((term: string) => {
       onSearchChange(term);
-    }, 300),
-    [onSearchChange]
+    }, 300)
   );
 
   useEffect(() => {
-    debouncedSearch(searchTerm);
+    // Update the debounced function if onSearchChange changes
+    debouncedSearchRef.current = debounce((term: string) => {
+      onSearchChange(term);
+    }, 300);
+  }, [onSearchChange]);
+
+  useEffect(() => {
+    // Call the debounced function from the ref
+    debouncedSearchRef.current(searchTerm);
+
     // Cleanup the debounced function on component unmount
     return () => {
-      debouncedSearch.cancel();
+      debouncedSearchRef.current.cancel();
     };
-  }, [searchTerm, debouncedSearch]);
+  }, [searchTerm]); // Only depends on searchTerm now
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);

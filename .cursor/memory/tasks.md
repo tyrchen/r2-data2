@@ -30,7 +30,7 @@
 -   [x] **Task F.6:** Implement `SchemaBrowser` component (fetch/display tables from `/api/databases/{dbName}/tables`).
 -   [x] **Task F.7:** Implement `SqlEditor` component wrapper around `<SqlMonacoEditor>`.
     -   [x] **Subtask F.7.1:** Integrate editor with `currentQuery` state.
-    -   [ ] **Subtask F.7.2:** Fetch schema details (`/api/.../schema`) and pass to editor's `tableSchemas` prop for autocompletion.
+    -   [x] **Subtask F.7.2:** Fetch schema details (`/api/.../schema`) and pass to editor's `tableSchemas` prop for autocompletion.
     -   [x] **Subtask F.7.3:** Implement "Execute" button logic (call `/api/execute-query`).
 -   [x] **Task F.8:** Implement `ResultsTable` component for displaying query results.
 -   [ ] **Task F.9:** Implement `Visualization/Chart` component using `react-vega`.
@@ -77,9 +77,9 @@
 -   [ ] **Task U.2:** Implement enhanced catalog browser.
     -   [x] **Subtask U.2.1:** Create `SearchFilterBar` component with debounced filtering.
     -   [x] **Subtask U.2.2:** Add `RefreshButton` with loading state for schema reload.
-    -   [ ] **Subtask U.2.3:** Implement `DatabaseTree` component with virtualized rendering for performance.
+    -   [ ] **Task U.2.3:** Implement `DatabaseTree` component with virtualized rendering for performance.
         -   [x] **Subtask U.2.3.1:** Create basic `CatalogBrowser` and custom `DatabaseTree` structure.
-        -   [ ] **Subtask U.2.3.2:** Integrate a tree library (e.g., react-complex-tree) or build custom virtualized tree.
+        -   [ ] **Subtask U.2.3.2:** Integrate a tree library (e.g., react-complex-tree) or build custom virtualized tree. (Skipped for now)
     -   [x] **Subtask U.2.4:** Create `FieldDetailPopup` component with comprehensive field metadata.
     -   [x] **Subtask U.2.5:** Add visual indicators for primary/foreign keys in the tree view.
 
@@ -133,3 +133,102 @@
     -   [ ] **Subtask U.8.3:** Implement error boundary components for resilience.
     -   [ ] **Subtask U.8.4:** Add comprehensive accessibility attributes (ARIA).
     -   [ ] **Subtask U.8.5:** Perform final performance audit and optimization.
+
+# Feature Planning Document: AI SQL Generation
+
+## Requirements Analysis
+- **Core Requirements:**
+  - [ ] Frontend: Implement a keyboard shortcut (CMD/CTRL+K) to trigger the AI query generation feature.
+  - [ ] Frontend: Add a UI element (e.g., button near Execute) to trigger the feature.
+  - [ ] Frontend: Display a non-intrusive modal/popup for the user to input a natural language prompt.
+  - [ ] Frontend: Modal should include a text area for the prompt and a "Generate SQL" button.
+  - [ ] Frontend: On "Generate SQL" click, send the prompt and the currently selected database name to a new backend endpoint (`/api/gen-query`).
+  - [ ] Frontend: Show loading state while waiting for the backend response.
+  - [ ] Frontend: On receiving the generated SQL, replace the content in the active SQL editor tab.
+  - [ ] Frontend: Display errors from the backend if generation fails.
+  - [ ] Frontend: Close the modal upon successful generation or explicit user action.
+  - [ ] Backend: Create a new POST endpoint `/api/gen-query`.
+  - [ ] Backend: Endpoint accepts JSON body: `{ "db_name": "string", "prompt": "string" }`.
+  - [ ] Backend: Endpoint requires authentication (use existing JWT middleware).
+  - [ ] Backend: Retrieve the full schema for the specified `db_name` (using existing schema fetching/caching logic).
+  - [ ] Backend: Format the schema into a suitable string representation for an LLM prompt.
+  - [ ] Backend: Construct a prompt for OpenAI's GPT-4o model, including the schema representation and the user's natural language prompt. Use a clear prompt template.
+  - [ ] Backend: Call the OpenAI API (Chat Completions) using the configured API key and model (GPT-4o).
+  - [ ] Backend: Extract the generated SQL query string from the OpenAI response.
+  - [ ] Backend: Return the generated SQL query in a JSON response: `{ "query": "string" }`.
+  - [ ] Backend: Handle potential errors during schema fetching, OpenAI API calls, and response parsing. Return appropriate error responses.
+  - [ ] Configuration: Add `OPENAI_API_KEY` to the application configuration (`config.toml` or environment variables).
+- **Technical Constraints:**
+  - [ ] OpenAI API usage has associated costs.
+  - [ ] OpenAI API has rate limits.
+  - [ ] Potential for large schema sizes exceeding OpenAI context window limits.
+  - [ ] Generated SQL is not guaranteed to be correct or optimal; user must review.
+
+## Component Analysis
+- **Affected Components:**
+  - **Frontend:**
+    - `App.tsx`: Add global keyboard shortcut listener, render new modal component.
+    - `EditorHeader.tsx`: Add new trigger button (e.g., Wand icon).
+    - `SqlEditor.tsx`: No direct changes, but its content will be updated via state.
+    - `useAppStore.ts`: Add state for modal visibility, loading status, error message, user prompt. Add actions for opening/closing modal, setting prompt, calling the new backend endpoint, and updating the active tab's query.
+    - *New Component*: `GenerateQueryModal.tsx`: Contains the dialog UI, text area, button, loading/error display.
+  - **Backend:**
+    - `src/main.rs`: Add route for `/api/gen-query`.
+    - `src/handlers/mod.rs`: Add new handler function `gen_query`.
+    - `src/state.rs`: Add `rig::providers::openai::Client` to `AppState`. Modify `AppState::new` for initialization (using `Client::from_env()`).
+    - `src/config.rs` (`AppConfig` struct): `openai_api_key` field might be less critical if using `Client::from_env()`, but keep for potential explicit initialization.
+    - `config.toml` (or `.env`): `OPENAI_API_KEY` environment variable required by `rig-core`.
+    - *New Module*: `src/ai/mod.rs` and `src/ai/rig.rs`: Contains schema formatting logic and API call function (`generate_sql_query`) using `rig-core`.
+    - `Cargo.toml`: Ensure `rig-core` dependency is present.
+    - `src/error.rs`: Potentially add new `AppError` variants for AI-related errors (e.g., `RigError`).
+
+## Design Decisions
+- **Architecture:**
+  - [x] Use the `rig-core` crate for interacting with the OpenAI API.
+  - [x] Store OpenAI API key securely via configuration, not hardcoded.
+  - [x] Initialize OpenAI client once and store in `AppState` for reuse.
+  - [x] Reuse existing schema fetching/caching logic (`get_full_schema`) in the new backend handler.
+  - [x] Format schema as Markdown for the OpenAI prompt (provides structure, relatively token-efficient).
+  - [x] Use GPT-4o model (currently recommended for balance of capability and cost).
+  - [x] Implement basic error handling for OpenAI API calls (e.g., network issues, API errors).
+- **UI/UX:**
+  - [x] Use a non-modal `Dialog` from shadcn/ui for the input prompt to be less intrusive.
+  - [x] Provide clear loading indication within the dialog.
+  - [x] Automatically close the dialog on successful query generation.
+  - [x] Ensure keyboard focus is managed correctly when opening/closing the dialog.
+- **Algorithms:**
+  - [ ] N/A (No complex custom algorithms needed for this feature).
+
+## Implementation Strategy
+1.  **Phase 1: Backend Setup & OpenAI Integration**
+    -   [x] Ensure `rig-core` dependency is in `Cargo.toml`.
+    -   [x] Ensure `OPENAI_API_KEY` environment variable is documented/settable.
+    -   [x] Implement `src/ai/rig.rs` module with `generate_sql_query` function using `rig-core` client, agent, and prompt methods (including schema formatting and prompt templating).
+    -   [x] Update `AppState` in `src/state.rs` to include and initialize the `rig::providers::openai::Client` (likely using `Client::from_env()`).
+    -   [x] Implement the `gen_query` handler in `src/handlers/mod.rs`, calling the function from `src/ai/rig.rs`.
+    -   [x] Add the `/api/gen-query` route in `src/main.rs`.
+    -   [x] Write initial backend tests (mocking `rig-core` interactions if possible, or focusing on handler logic).
+2.  **Phase 2: Frontend UI & Integration**
+    -   [x] Create the `GenerateQueryModal.tsx` component using shadcn `Dialog`, `Textarea`, `Button`.
+    -   [x] Update `useAppStore.ts` with new state and actions (`isGenerateQueryModalOpen`, `generateQueryLoading`, `generateQueryError`, `generateQueryPrompt`, `openGenerateQueryModal`, `closeGenerateQueryModal`, `setGenerateQueryPrompt`, `generateQuery`).
+    -   [x] Implement the `generateQuery` action to call the backend endpoint and handle responses/errors, updating the active tab's query on success.
+    -   [x] Add the trigger button to `EditorHeader.tsx`.
+    -   [x] Add the global keyboard shortcut listener (e.g., in `App.tsx`).
+    -   [x] Render the `GenerateQueryModal` component in `App.tsx`.
+    -   [ ] Test the end-to-end flow.
+
+## Testing Strategy
+- **Unit Tests:**
+  - [ ] Backend: Test schema formatting logic in `src/ai/rig.rs`.
+  - [ ] Backend: Test prompt template construction.
+  - [ ] Backend: Test `gen_query` handler logic with mocked `rig-core` interactions (success and error cases).
+  - [ ] Frontend: Test Zustand store actions related to the feature (`generateQuery`, modal state updates).
+  - [ ] Frontend: Test `GenerateQueryModal` component rendering and interactions (e.g., button disabled states).
+- **Integration Tests:**
+  - [ ] Backend: Test the `/api/gen-query` endpoint directly (requires mocking `rig-core` interactions if possible, or using a test key with caution).
+  - [ ] Frontend: Test the flow from triggering the modal -> entering prompt -> clicking generate -> seeing editor update or error message.
+
+## Documentation Plan
+- [ ] Add details about the `OPENAI_API_KEY` **environment variable** requirement to `README.md` or deployment guides.
+- [ ] Briefly document the `/api/gen-query` endpoint (request/response format) in API documentation (if any).
+- [ ] Add comments in `src/ai/rig.rs` explaining the prompt structure.

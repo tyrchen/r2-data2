@@ -30,7 +30,9 @@ axum = { version = "0.8.4", features = ["http2", "macros"] }
 config = "0.15.11"
 jsonwebtoken = "9.3.1"
 mime_guess = "2.0.5"
+moka = { version = "0.12", features = ["future"] }
 papaya = { version = "0.2.1", features = ["serde"] }
+rig-core = "0.12.0"
 rust-embed = { version = "8.7.0", features = ["axum-ex"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0"
@@ -46,7 +48,7 @@ tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.6.2", features = ["trace", "cors"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-moka = { version = "0.12", features = ["future"] }
 
 [dev-dependencies]
 anyhow = "1.0"
+insta = { version = "1.43", features = ["yaml"] }

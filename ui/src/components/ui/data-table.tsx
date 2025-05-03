@@ -33,7 +33,7 @@ import {
 import { ChevronDown, Download } from "lucide-react";
 
 // Helper function to convert data to CSV
-function convertToCSV(data: Record<string, any>[]) {
+function convertToCSV(data: Record<string, unknown>[]) {
   if (!data || data.length === 0) return "";
   const keys = Object.keys(data[0]);
   const header = keys.join(",");
@@ -59,12 +59,13 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
 }
 
-export function DataTable<TData extends Record<string, any>, TValue>({
+export function DataTable<TData extends Record<string, unknown>, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [globalFilter, setGlobalFilter] = React.useState('');
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({}); // For potential future use
@@ -72,6 +73,11 @@ export function DataTable<TData extends Record<string, any>, TValue>({
   const table = useReactTable({
     data,
     columns,
+    initialState: {
+      pagination: {
+        pageSize: 50,
+      },
+    },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
@@ -80,11 +86,13 @@ export function DataTable<TData extends Record<string, any>, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    onGlobalFilterChange: setGlobalFilter,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
+      globalFilter,
     },
   });
 
@@ -99,9 +107,9 @@ export function DataTable<TData extends Record<string, any>, TValue>({
   };
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="flex flex-col w-full h-full">
       {/* Filtering and Column Visibility */}
-      <div className="flex items-center py-4 px-2 space-x-2">
+      <div className="flex items-center px-2 py-4 space-x-2">
         {/* Basic global filter (can be improved) */}
         <Input
           placeholder="Filter results..."
@@ -112,12 +120,14 @@ export function DataTable<TData extends Record<string, any>, TValue>({
           // }
           // For simplicity, we won't implement per-column filtering yet
           // This input can act as a general search trigger if needed later
+          value={globalFilter ?? ''}
+          onChange={(event) => setGlobalFilter(event.target.value)}
           className="max-w-sm"
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
+              Columns <ChevronDown className="ml-2 w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -143,9 +153,9 @@ export function DataTable<TData extends Record<string, any>, TValue>({
       </div>
 
       {/* Table */}
-      <div className="rounded-md border flex-grow overflow-auto">
+      <div className="overflow-auto flex-grow rounded-md border">
         <Table>
-          <TableHeader className="sticky top-0 bg-background z-10">
+          <TableHeader className="sticky top-0 z-10 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -189,7 +199,7 @@ export function DataTable<TData extends Record<string, any>, TValue>({
       </div>
 
       {/* Pagination & Export */}
-      <div className="flex items-center justify-between py-4 px-2 flex-shrink-0">
+      <div className="flex flex-shrink-0 justify-between items-center px-2 py-4">
         {/* Export Buttons */}
         <div className="flex items-center space-x-2">
           <Button
@@ -198,7 +208,7 @@ export function DataTable<TData extends Record<string, any>, TValue>({
             onClick={handleExportCSV}
             disabled={data.length === 0}
           >
-            <Download className="mr-2 h-4 w-4" /> Export CSV
+            <Download className="mr-2 w-4 h-4" /> Export CSV
           </Button>
           <Button
             variant="outline"
@@ -206,7 +216,7 @@ export function DataTable<TData extends Record<string, any>, TValue>({
             onClick={handleExportJSON}
             disabled={data.length === 0}
           >
-            <Download className="mr-2 h-4 w-4" /> Export JSON
+            <Download className="mr-2 w-4 h-4" /> Export JSON
           </Button>
         </div>
 

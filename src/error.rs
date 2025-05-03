@@ -51,6 +51,9 @@ pub enum AppError {
 
     #[error("Invalid query result: {0}")]
     InvalidQueryResult(String),
+
+    #[error("AI error: {0}")]
+    AiError(String),
 }
 
 impl IntoResponse for AuthError {
@@ -113,6 +116,13 @@ impl IntoResponse for AppError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Invalid query result".to_string(),
+                )
+            }
+            AppError::AiError(msg) => {
+                tracing::error!("AI generation error: {}", msg);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("AI generation failed: {}", msg),
                 )
             }
         };

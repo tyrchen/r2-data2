@@ -1,17 +1,16 @@
 import React from 'react';
 import { useAppStore, useActiveTabData } from '@/store/useAppStore';
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/ui/data-table"; // Import the new DataTable
 import { ColumnDef } from "@tanstack/react-table"; // Import ColumnDef
 import { Button } from "@/components/ui/button"; // For sortable headers
 import { ArrowUpDown } from "lucide-react"; // For sortable headers
-import { ChartTypeSelector, ChartType } from "@/components/viz/ChartTypeSelector"; // Import selector
 import { RechartsRenderer } from "./viz/RechartsRenderer"; // Import the new renderer
 import { ChartConfigPanel } from "./viz/ChartConfigPanel"; // Import the config panel
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs
+import { QueryPlanViewer } from "./viz/QueryPlanViewer"; // Import Plan Viewer
 
 // Generic type for row data
-type ResultRow = Record<string, any>;
+type ResultRow = Record<string, unknown>;
 
 // Helper to generate columns dynamically for DataTable
 const generateColumns = (data: ResultRow[]): ColumnDef<ResultRow>[] => {
@@ -31,7 +30,7 @@ const generateColumns = (data: ResultRow[]): ColumnDef<ResultRow>[] => {
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
           {key}
-          <ArrowUpDown className="ml-2 h-4 w-4" />
+          <ArrowUpDown className="ml-2 w-4 h-4" />
         </Button>
       )
     },
@@ -48,134 +47,124 @@ const generateColumns = (data: ResultRow[]): ColumnDef<ResultRow>[] => {
 };
 
 export function ResultViewer() {
-  // Get active tab data
+  // --- Hooks MUST be called unconditionally at the top ---
   const activeTab = useActiveTabData();
-
-  // Global UI state (could be moved to tab state if needed)
-  const showVisualization = useAppStore((state) => state.showVisualization);
-  const setShowVisualization = useAppStore((state) => state.setShowVisualization);
   const selectedChartType = useAppStore((state) => state.selectedChartType);
-  const setSelectedChartType = useAppStore((state) => state.setSelectedChartType);
+  const [selectedResultTab, setSelectedResultTab] = React.useState("results");
 
-  // Guard if no active tab
+  // Memoize column generation - moved before the guard clause
+  const columns = React.useMemo(() => {
+    const results = activeTab?.result?.result;
+    return results ? generateColumns(results as ResultRow[]) : []; // Type assertion needed after checking
+  }, [activeTab?.result?.result]);
+
+  // Memoize data - moved before the guard clause
+  const data = React.useMemo(() => activeTab?.result?.result || [], [activeTab?.result?.result]);
+  const planData = activeTab?.result?.plan; // Type is unknown from store, handle in QueryPlanViewer
+  // --- End Hooks ---
+
+  // Guard if no active tab - Now safe to call *after* hooks
   if (!activeTab) return <div className="p-4 text-muted-foreground">No active tab selected.</div>;
 
-  // Destructure state from the active tab
+  // Destructure state *after* the guard clause ensures activeTab exists
   const {
     result: queryResult,
     error: queryError,
     isRunning: isQueryRunning
   } = activeTab;
 
-  // Memoize column generation
-  const columns = React.useMemo(() => {
-    const results = queryResult?.result;
-    return results ? generateColumns(results) : [];
-  }, [queryResult]);
-
-  const data = React.useMemo(() => queryResult?.result || [], [queryResult]);
-
-  // Get row count
+  // These calculations depend on queryResult which exists if activeTab exists
   const rowCount = data.length;
-  // Placeholder for execution time - needs to be added to store/queryResult
-  const executionTime = queryResult?.executionTime; // Example: Assume it exists
+  const executionTime = queryResult?.executionTime;
+  const hasData = data.length > 0;
+  const hasPlan = !!planData;
 
-  const renderContent = () => {
+  const renderResultsTabContent = () => {
+    if (!hasData) {
+      return (
+        <div className="p-4 text-center text-muted-foreground">
+          {queryResult?.message ? queryResult.message : "Query executed successfully, but returned no rows."}
+          {typeof executionTime === 'number' && (
+            <p className="mt-1 text-xs">Execution Time: {executionTime.toFixed(3)}s</p>
+          )}
+        </div>
+      );
+    }
+    return <DataTable columns={columns} data={data} />;
+  };
+
+  const renderChartTabContent = () => {
+    if (!hasData) {
+      return <div className="p-4 text-center text-muted-foreground">No data available for visualization.</div>;
+    }
+    // Show config panel on left, chart on right
+    return (
+      <div className="flex overflow-hidden flex-row w-full h-full">
+        {/* Config Panel (Left) */}
+        <ChartConfigPanel />
+
+        {/* Chart Area (Right) */}
+        <div className="flex-grow h-full border-l"> {/* Add border */}
+          <RechartsRenderer data={data} chartType={selectedChartType} />
+        </div>
+      </div>
+    );
+  };
+
+  const renderPlanTabContent = () => {
+    return <QueryPlanViewer planData={planData} />;
+  };
+
+  const renderMainContent = () => {
     if (isQueryRunning) {
       return <div className="p-4 text-center">Running query...</div>;
     }
     if (queryError) {
-      return <div className="p-4 text-destructive text-center">Error: {queryError}</div>;
+      return <div className="p-4 text-center text-destructive">Error: {queryError}</div>;
     }
     if (!queryResult) {
       return <div className="p-4 text-center text-muted-foreground">Run a query to see results here.</div>;
     }
 
-    if (showVisualization) {
-      // Render chart and config panel side-by-side
-      return (
-        <div className="flex h-full w-full">
-          <div className="flex-grow h-full">
-            <RechartsRenderer data={data} chartType={selectedChartType} />
-          </div>
-          <ChartConfigPanel />
-        </div>
-      );
-    }
-
-    // Handle non-SELECT results
-    if (queryResult?.message) { // Check queryResult directly
-      return (
-        <div className="p-4">
-          <p>{queryResult.message}</p>
-          {typeof queryResult.affectedRows === 'number' && (
-            <p className="text-sm text-muted-foreground">Rows affected: {queryResult.affectedRows}</p>
-          )}
-          {/* Display execution time if available */}
-          {typeof executionTime === 'number' && (
-            <p className="text-xs text-muted-foreground mt-1">Execution Time: {executionTime.toFixed(3)}s</p>
-          )}
-        </div>
-      );
-    }
-
-    // Handle SELECT results
-    if (!data || data.length === 0) {
-      return (
-        <div className="p-4 text-center">
-          Query executed successfully, but returned no rows.
-          {typeof executionTime === 'number' && (
-            <p className="text-xs text-muted-foreground mt-1">Execution Time: {executionTime.toFixed(3)}s</p>
-          )}
-        </div>
-      );
-    }
-
-    // Render DataTable for SELECT results
-    return <DataTable columns={columns} data={data} />;
+    // Use Tabs for Results, Chart, and Plan
+    return (
+      <Tabs value={selectedResultTab} onValueChange={setSelectedResultTab} className="flex flex-col h-full">
+        <TabsList className="mb-1">
+          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="chart" disabled={!hasData}>Chart</TabsTrigger>
+          <TabsTrigger value="plan" disabled={!hasPlan}>Explain Plan</TabsTrigger>
+        </TabsList>
+        <TabsContent value="results" className="overflow-auto flex-grow">
+          {renderResultsTabContent()} {/* Render results/viz */}
+        </TabsContent>
+        <TabsContent value="chart" className="flex overflow-auto flex-col flex-grow">
+          {renderChartTabContent()}
+        </TabsContent>
+        <TabsContent value="plan" className="overflow-auto flex-grow">
+          {renderPlanTabContent()}
+        </TabsContent>
+      </Tabs>
+    );
   };
 
-  // Define available chart types (adjust as needed)
-  const availableChartTypes: ChartType[] = ['bar', 'line', 'pie', 'area', 'scatter'];
 
   return (
-    <div className="p-2 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-2 flex-shrink-0">
-        {/* Header Section */}
-        <div className="flex items-center space-x-4">
-          {/* Display Stats only for SELECT results with data */}
-          {data.length > 0 && !queryResult?.message && (
+    <div className="flex flex-col p-2 h-full">
+      <div className="flex flex-shrink-0 justify-between items-center mb-2 space-x-4">
+        {/* Header Section: Stats ONLY */}
+        <div className="flex flex-shrink-0 items-center space-x-4">
+          {queryResult && !queryError && (
             <span className="text-sm text-muted-foreground">
               {rowCount} {rowCount === 1 ? 'row' : 'rows'}
               {typeof executionTime === 'number' && ` in ${executionTime.toFixed(3)}s`}
             </span>
           )}
         </div>
-        {/* Controls Section (Toggle & Chart Selector) */}
-        {data.length > 0 && !queryResult?.message && (
-          <div className="flex items-center space-x-4">
-            {/* Chart Type Selector - only visible when visualization is active */}
-            {showVisualization && (
-              <ChartTypeSelector
-                availableTypes={availableChartTypes}
-                selectedType={selectedChartType}
-                onTypeChange={setSelectedChartType}
-              />
-            )}
-            {/* Visualization Toggle */}
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="visualization-toggle"
-                checked={showVisualization}
-                onCheckedChange={setShowVisualization}
-              />
-              <Label htmlFor="visualization-toggle">Visualize</Label>
-            </div>
-          </div>
-        )}
       </div>
-      <div className="flex-grow overflow-hidden">
-        {renderContent()}
+
+      {/* Main Content Area (Tabs) */}
+      <div className="overflow-auto flex-grow">
+        {renderMainContent()}
       </div>
     </div>
   );

@@ -56,12 +56,13 @@ export interface TableEntry {
 
 // --- Query Result / Tab Interfaces remain the same ---
 export interface QueryResultData {
-  columns?: string[]; // Column names (if using array of arrays)
-  rows?: any[][]; // Array of arrays
-  result?: Record<string, any>[]; // Or array of objects (preferred format from design)
-  message?: string; // For non-SELECT queries
+  // columns?: string[]; // Column names (if using array of arrays) - Keep commented
+  // rows?: any[][]; // Array of arrays - Keep commented
+  result?: Record<string, unknown>[] | null; // Use unknown
+  message?: string; // For non-SELECT queries or errors
   affectedRows?: number;
-  executionTime?: number; // Add optional execution time field
+  executionTime?: number; // In seconds
+  plan?: unknown; // Use unknown
 }
 
 // --- NEW: Query Tab State Interface ---
@@ -104,6 +105,8 @@ export interface AppState {
   executeQuery: () => Promise<void>;
   queryHistory: string[];
   addQueryToHistory: (query: string) => void;
+  queryLimit: number;
+  setQueryLimit: (limit: number) => void;
 
   // UI State
   showVisualization: boolean;
@@ -139,8 +142,21 @@ export interface AppState {
   setActiveTab: (tabId: string | null) => void;
   updateQueryInTab: (tabId: string, query: string) => void;
   updateTabName: (tabId: string, name: string) => void; // Action to rename tab
-  executeQueryForTab: (tabId: string) => Promise<void>;
+  executeQueryForTab: (tabId: string, limit: number) => Promise<void>;
   // --- END REFACTOR ---
+
+  // --- NEW: AI Query Generation State ---
+  isGenerateQueryModalOpen: boolean;
+  generateQueryLoading: boolean;
+  generateQueryError: string | null;
+  generateQueryPrompt: string;
+
+  // Actions for AI Query Generation
+  openGenerateQueryModal: () => void;
+  closeGenerateQueryModal: () => void;
+  setGenerateQueryPrompt: (prompt: string) => void;
+  generateQuery: () => Promise<void>; // Action to trigger backend call
+  // --- END: AI Query Generation State ---
 
   // Add init to interface
   init: () => void;
@@ -213,6 +229,7 @@ export const useAppStore = create<AppState>()(
       showVisualization: false,
       selectedChartType: 'bar', // Default to bar chart initially
       queryHistory: [],
+      queryLimit: 500,
 
       // --- NEW: Chart Config Initial State ---
       chartConfig: {
@@ -232,6 +249,13 @@ export const useAppStore = create<AppState>()(
 
       // --- NEW: Layout Initial State ---
       ...loadLayoutFromStorage(), // Load initial layout state
+
+      // --- NEW: AI Query Generation Initial State ---
+      isGenerateQueryModalOpen: false,
+      generateQueryLoading: false,
+      generateQueryError: null,
+      generateQueryPrompt: "",
+      // --- END: AI Query Generation Initial State ---
 
       // --- Actions ---
 
@@ -292,9 +316,10 @@ export const useAppStore = create<AppState>()(
             fullSchemaError: null, // Clear error on success
           });
 
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("Failed to fetch full schema:", error);
-          set({ fullSchemaError: error.message || 'An unknown error occurred', isFetchingFullSchema: false });
+          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+          set({ fullSchemaError: errorMessage, isFetchingFullSchema: false });
         }
       },
 
@@ -372,16 +397,19 @@ export const useAppStore = create<AppState>()(
           // Assuming backend returns QueryResultData structure
           set({ queryResult: resultData, isQueryRunning: false });
 
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("Query execution failed:", error);
-          set({ queryError: error.message || 'An unknown error occurred during query execution.', isQueryRunning: false });
+          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during query execution.';
+          set({ queryError: errorMessage, isQueryRunning: false });
         }
       },
 
-      addQueryToHistory: (query: string) => // Add action definition
+      addQueryToHistory: (query: string) =>
         set((state) => ({
-          queryHistory: [query, ...state.queryHistory.slice(0, 49)], // Keep last 50
+          queryHistory: [query, ...state.queryHistory.slice(0, 49)],
         })),
+
+      setQueryLimit: (limit: number) => set({ queryLimit: limit }),
 
       // UI State
       setShowVisualization: (show) => {
@@ -480,71 +508,171 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
-      executeQueryForTab: async (tabId) => {
-        const tab = get().tabs.find(t => t.id === tabId);
-        const dbName = get().selectedDatabase; // Using global DB for now
-        const token = get().authToken;
+      executeQueryForTab: async (tabId: string, limit: number) => {
+        const state = get();
+        const tab = state.tabs.find(t => t.id === tabId);
+        const database = state.selectedDatabase;
+        const token = state.authToken;
 
-        if (!tab || !dbName || !token) {
-          const errorMsg = !tab ? `Tab ${tabId} not found.` :
-            !dbName ? 'No database selected.' :
-              'Missing authentication token.';
-          set((state) => ({
-            tabs: state.tabs.map(t => t.id === tabId ? { ...t, isRunning: false, error: errorMsg } : t)
-          }));
+        if (!tab) {
+          console.error(`Tab with ID ${tabId} not found for execution.`);
+          return;
+        }
+        if (!database) {
+          set(prevState => ({ tabs: prevState.tabs.map(t => t.id === tabId ? { ...t, error: "No database selected.", isRunning: false } : t) }));
+          return;
+        }
+        if (!token) {
+          set(prevState => ({ tabs: prevState.tabs.map(t => t.id === tabId ? { ...t, error: "Authentication token is missing.", isRunning: false } : t) }));
+          return;
+        }
+        if (!tab.query) {
+          set(prevState => ({ tabs: prevState.tabs.map(t => t.id === tabId ? { ...t, error: "Query is empty.", isRunning: false } : t) }));
           return;
         }
 
-        const query = tab.query;
+        // Update tab state to indicate running
+        set(prevState => ({ tabs: prevState.tabs.map(t => t.id === tabId ? { ...t, isRunning: true, error: null, result: null } : t) }));
 
-        // Set loading state for the specific tab
-        set((state) => ({
-          tabs: state.tabs.map(t => t.id === tabId ? { ...t, isRunning: true, result: null, error: null } : t)
-        }));
+        const startTime = performance.now(); // Start timer
 
-        // Add to history? Maybe move history management inside tab state?
-        // const addQueryToHistoryAction = get().addQueryToHistory;
-        // if (addQueryToHistoryAction) { addQueryToHistoryAction(query); }
-
-        console.log(`Executing query on ${dbName}: ${query}`);
         try {
           const response = await fetch(`${API_BASE_URL}/api/execute-query`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ db_name: dbName, query })
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ query: tab.query, db_name: database, limit }), // Pass limit in the body
           });
-          const resultDataArray: Record<string, any>[] = await response.json(); // Expect an array now
+
+          const endTime = performance.now(); // End timer
+          const executionTime = (endTime - startTime) / 1000; // Calculate time in seconds
 
           if (!response.ok) {
-            // Attempt to get error from array structure is tricky, rely on status/generic msg
-            throw new Error(`Query execution failed. Status: ${response.status}`);
+            const errorData = await response.json().catch(() => ({ message: response.statusText }));
+            // Attempt to access message, otherwise use default
+            const message = typeof errorData === 'object' && errorData !== null && 'message' in errorData && typeof errorData.message === 'string'
+              ? errorData.message
+              : `HTTP error ${response.status}`;
+            throw new Error(message);
           }
 
-          // --- FIX: Wrap the received array in the expected QueryResultData structure ---
-          const formattedResultData: QueryResultData = {
-            result: resultDataArray ?? [], // Ensure result is always an array, even if null/undefined returned
-            // We don't get columns/rows/message/affectedRows from this backend format
-          };
-          // --- END FIX ---
+          const data: unknown = await response.json(); // Fetch as unknown
 
-          // Update the specific tab with the *formatted* resultData
-          set((state) => ({
-            tabs: state.tabs.map(t =>
-              t.id === tabId ? { ...t, isRunning: false, result: formattedResultData, error: null } : t // Use formatted data
-            ),
+          // --- Type checking and processing for backend response --- //
+          let resultData: QueryResultData;
+          if (Array.isArray(data)) {
+            console.warn("Backend returned raw array, wrapping in { result: [...] }");
+            // Ensure elements are Records before assigning
+            const resultsArray = data.every(item => typeof item === 'object' && item !== null)
+              ? data as Record<string, unknown>[]
+              : []; // Or handle error differently
+            resultData = { result: resultsArray.length > 0 ? resultsArray : null, executionTime };
+            if (resultsArray.length === 0) {
+              resultData.message = "Query executed successfully, 0 rows returned.";
+            }
+          } else if (typeof data === 'object' && data !== null) {
+            // Assume backend returned the correct structure, assign executionTime
+            // We trust the backend structure here, potential runtime error if structure is wrong
+            resultData = { ...(data as Partial<QueryResultData>), executionTime };
+            // Ensure result is array of records or null
+            if (resultData.result && !Array.isArray(resultData.result)) {
+              console.error("Backend object response has non-array result field:", resultData.result);
+              resultData.result = null; // or throw error
+            } else if (resultData.result && Array.isArray(resultData.result) && !resultData.result.every(item => typeof item === 'object' && item !== null)) {
+              console.error("Backend object response has result array with non-object elements:", resultData.result);
+              resultData.result = null; // or throw error
+            }
+
+          } else {
+            // Handle unexpected data format
+            console.error("Unexpected response format from /api/execute-query:", data);
+            throw new Error("Received unexpected data format from server.");
+          }
+          // --- END Type checking --- //
+
+          // Update tab state with results
+          set(prevState => ({
+            tabs: prevState.tabs.map(t => t.id === tabId ? { ...t, isRunning: false, result: resultData, error: null } : t),
+            // Add to global history as well
+            queryHistory: [tab.query, ...prevState.queryHistory.filter(q => q !== tab.query)].slice(0, 50),
           }));
 
-        } catch (error: any) {
-          console.error(`Query execution failed for tab ${tabId}:`, error);
-          // Update the specific tab with the error
-          set((state) => ({
-            tabs: state.tabs.map(t =>
-              t.id === tabId ? { ...t, isRunning: false, error: error.message || 'An unknown error occurred' } : t
-            ),
-          }));
+        } catch (error: unknown) {
+          // Update tab state with error
+          const errorMessage = error instanceof Error ? error.message : 'Failed to execute query';
+          set(prevState => ({ tabs: prevState.tabs.map(t => t.id === tabId ? { ...t, isRunning: false, error: errorMessage, result: null } : t) }));
         }
       },
       // --- END REFACTOR ---
+
+      // --- NEW: AI Query Generation Actions ---
+      openGenerateQueryModal: () => set({ isGenerateQueryModalOpen: true, generateQueryPrompt: "", generateQueryError: null }),
+      closeGenerateQueryModal: () => set({ isGenerateQueryModalOpen: false }),
+      setGenerateQueryPrompt: (prompt) => set({ generateQueryPrompt: prompt }),
+      generateQuery: async () => {
+        const state = get();
+        const token = state.authToken;
+        const database = state.selectedDatabase;
+        const prompt = state.generateQueryPrompt;
+        const activeTabId = state.activeTabId;
+
+        if (!activeTabId) {
+          set({ generateQueryError: "No active query tab found." });
+          return;
+        }
+        if (!database) {
+          set({ generateQueryError: "No database selected." });
+          return;
+        }
+        // Trim the prompt before checking if it's empty
+        if (!prompt || !prompt.trim()) {
+          set({ generateQueryError: "Prompt cannot be empty." });
+          return;
+        }
+        if (!token) {
+          set({ generateQueryError: "Authentication token is missing." });
+          return;
+        }
+
+        set({ generateQueryLoading: true, generateQueryError: null });
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/gen-query`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ db_name: database, prompt }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+            throw new Error(errorData.message || errorData.error || `Failed to generate query. Status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const generatedQuery = data.query; // Assuming backend returns { query: "..." }
+
+          if (!generatedQuery) {
+            throw new Error("AI did not return a query.");
+          }
+
+          // Update the query in the active tab
+          state.updateQueryInTab(activeTabId, generatedQuery);
+
+          // Close modal on success
+          set({ generateQueryLoading: false, isGenerateQueryModalOpen: false, generateQueryPrompt: "" });
+
+        } catch (error: unknown) {
+          console.error("AI Query generation failed:", error);
+          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during AI query generation.';
+          set({ generateQueryError: errorMessage, generateQueryLoading: false });
+        }
+      },
+      // --- END: AI Query Generation Actions ---
 
       // Initialize the store
       init: () => {
