@@ -23,6 +23,7 @@ keywords = [
   "visualization",
   "data-browser",
 ]
+include = ["ui/dist/**/*", "src/**/*", "Cargo.toml"]
 
 [dependencies]
 anyhow = "1.0.98"
@@ -52,3 +53,7 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 [dev-dependencies]
 anyhow = "1.0"
 insta = { version = "1.43", features = ["yaml"] }
+
+[[bin]]
+name = "r2-data2"
+path = "src/main.rs"
