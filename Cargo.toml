@@ -1,6 +1,6 @@
 [package]
 name = "r2-data2"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2024"
 license = "MIT"
