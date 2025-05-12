@@ -36,7 +36,7 @@ export interface FullSchema { // Assuming this matches the root object from /api
 // --- END SCHEMA Interfaces ---
 
 // Read API base URL from env, default if not set
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3111';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // --- Derived/Legacy Interfaces ---
 // Still used by some components, populated from FullSchema

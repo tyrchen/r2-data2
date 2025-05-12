@@ -59,7 +59,7 @@ mod tests {
         user_id: &str,
         duration_secs: u64,
     ) -> Result<String, jsonwebtoken::errors::Error> {
-        let config = AppConfig::load().unwrap();
+        let config = AppConfig::load("./config").unwrap();
         let secret = config.jwt_secret;
         let now = SystemTime::now();
         let expiration = now.duration_since(UNIX_EPOCH).expect("Time went backwards")
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn test_jwt_generation() {
-        let config = AppConfig::load().unwrap();
+        let config = AppConfig::load("./config").unwrap();
         let secret = config.jwt_secret;
         let user_id = "test_user@example.com";
         let token = generate_test_jwt(user_id, 3600 * 24 * 365 * 10); // 10 years expiration
