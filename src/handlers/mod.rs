@@ -344,7 +344,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_tables() {
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let state = AppState::new(AppConfig::load("./config").unwrap())
+            .await
+            .unwrap();
         let Json(response) = list_tables(State(state), Path("users".to_string()))
             .await
             .unwrap();
@@ -356,7 +358,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_table_schema() {
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let state = AppState::new(AppConfig::load("./config").unwrap())
+            .await
+            .unwrap();
         let Json(response) = get_table_schema(
             State(state),
             Path(("users".to_string(), "repository_members".to_string())),
@@ -394,7 +398,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_query() {
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let state = AppState::new(AppConfig::load("./config").unwrap())
+            .await
+            .unwrap();
         let Json(data) = execute_query(
             State(state),
             Json(ExecuteQueryRequest {
@@ -415,7 +421,9 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_gen_query_placeholder() {
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let state = AppState::new(AppConfig::load("./config").unwrap())
+            .await
+            .unwrap();
         let payload = GenerateQueryRequest {
             db_name: "users".to_string(),
             prompt: "show me all users".to_string(),
@@ -433,7 +441,9 @@ mod tests {
     #[tokio::test]
     async fn test_gen_query_handler_success() {
         // Arrange: Create real AppState (includes real OpenAI client, but we won't use it)
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let state = AppState::new(AppConfig::load("./config").unwrap())
+            .await
+            .unwrap();
 
         // Arrange: Create mock schema data
         let mock_db_schema = DatabaseSchema {
@@ -493,7 +503,9 @@ mod tests {
     #[tokio::test]
     async fn test_gen_query_handler_ai_error() {
         // Arrange: Create real AppState
-        let state = AppState::new(AppConfig::load().unwrap()).await.unwrap();
+        let state = AppState::new(AppConfig::load("./config").unwrap())
+            .await
+            .unwrap();
 
         // Arrange: Mock schema data and insert into cache (same as success test)
         let mock_db_schema = DatabaseSchema {

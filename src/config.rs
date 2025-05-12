@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::{fmt, path::Path, str::FromStr};
 
 use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
@@ -23,11 +23,15 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn load() -> Result<Self, anyhow::Error> {
+    pub fn load(config_path: &str) -> Result<Self, anyhow::Error> {
+        // Construct paths for configuration files
+        let default_config = Path::new(config_path).join("default");
+        let dev_config = Path::new(config_path).join("development");
+
         // Load configuration
         let config = Config::builder()
-            .add_source(File::with_name("config/default"))
-            .add_source(File::with_name("config/development").required(false))
+            .add_source(File::with_name(default_config.to_str().unwrap()))
+            .add_source(File::with_name(dev_config.to_str().unwrap()).required(false))
             .add_source(Environment::with_prefix("APP").separator("__"))
             .build()?;
 

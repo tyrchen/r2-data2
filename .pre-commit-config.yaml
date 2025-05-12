@@ -70,7 +70,6 @@ repos:
         language: system
         files: \.tsx?$|\.ts?$
         pass_filenames: false
-        working_dir: ui # Run in the ui directory
       - id: yarn-test
         name: yarn test (ui)
         description: Run frontend unit tests.
@@ -78,4 +77,3 @@ repos:
         language: system
         files: \.tsx?$|\.ts?$
         pass_filenames: false
-        working_dir: ui # Run in the ui directory

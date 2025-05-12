@@ -121,7 +121,7 @@ mod tests {
     async fn test_get_router() {
         // Mock or load a valid config for testing
         // This might require creating a test config file or mocking AppConfig::load
-        let config = AppConfig::load().unwrap(); // Assumes config files exist
+        let config = AppConfig::load("./config").unwrap(); // Assumes config files exist
         let state = AppState::new(config).await.unwrap();
         let _router = get_router(state);
         // Basic test passes if it doesn't panic

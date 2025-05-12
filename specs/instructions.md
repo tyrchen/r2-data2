@@ -103,3 +103,5 @@ const Dialog = React.forwardRef<
 })
 Dialog.displayName = "Dialog"
 ```
+
+Make it to use clap so that user could point to the config path (default to ./config), and config is loaded from there. Please modify @main.rs @config.rs accordingly.

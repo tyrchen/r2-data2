@@ -1,6 +1,6 @@
 [package]
 name = "r2-data2"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2024"
 license = "MIT"
@@ -19,6 +19,7 @@ include = ["ui/dist/**/*", "src/**/*", "Cargo.toml"]
 [dependencies]
 anyhow = "1.0.98"
 axum = { version = "0.8.4", features = ["http2", "macros"] }
+clap = { version = "4.5", features = ["derive"] }
 config = "0.15.11"
 jsonwebtoken = "9.3.1"
 mime_guess = "2.0.5"
