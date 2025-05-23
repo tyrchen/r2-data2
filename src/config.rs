@@ -45,6 +45,9 @@ impl fmt::Display for DatabaseType {
         match self {
             DatabaseType::Postgres => write!(f, "postgres"),
             DatabaseType::Mysql => write!(f, "mysql"),
+            DatabaseType::Redis => write!(f, "redis"),
+            DatabaseType::ScyllaDB => write!(f, "scylladb"),
+            DatabaseType::OpenSearch => write!(f, "opensearch"),
         }
     }
 }
@@ -56,6 +59,9 @@ impl FromStr for DatabaseType {
         match s.to_lowercase().as_str() {
             "postgres" | "postgresql" => Ok(DatabaseType::Postgres),
             "mysql" | "mariadb" => Ok(DatabaseType::Mysql),
+            "redis" => Ok(DatabaseType::Redis),
+            "scylladb" => Ok(DatabaseType::ScyllaDB),
+            "opensearch" => Ok(DatabaseType::OpenSearch),
             _ => Err(anyhow::anyhow!("Invalid database type: {}", s)),
         }
     }

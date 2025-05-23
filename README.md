@@ -65,7 +65,43 @@ This is still imperfect, but it's working and it just spent me 2-3 nights to bui
 
 ### Configuration
 
-1.  Edit `config/default.toml` to add your database connection strings under the `[[databases]]` array.
+1.  Edit `config/default.toml` to add your database connection strings under the `[[databases]]` array. Each database configuration is a TOML table:
+
+    ```toml
+    [[databases]]
+    name = "your_db_alias" # A unique name/alias for this connection
+    type = "database_type"  # Type of the database (see below)
+    conn_string = "your_connection_string" # Connection string for the database
+    ```
+
+    Supported `database_type` values and their `conn_string` formats:
+
+    *   **`postgres`**: For PostgreSQL databases.
+        *   `conn_string` format: `postgresql://[user[:password]@][host][:port][/database][?options]`
+        *   Example: `postgres://postgres:postgres@localhost:5432/mydatabase`
+
+    *   **`mysql`**: For MySQL databases.
+        *   `conn_string` format: `mysql://[user[:password]@][host][:port][/database][?options]`
+        *   Example: `mysql://root:password@localhost:3306/mydatabase`
+
+    *   **`redis`**: For Redis key-value store.
+        *   `conn_string` format: `redis://[<username>][:<password>@]<hostname>[:<port>][/<db_number>]`
+        *   Example: `redis://127.0.0.1:6379/0`
+        *   Note: The query editor for Redis is a simple command-line style editor.
+
+    *   **`scylladb`**: For ScyllaDB (CQL-based, similar to Cassandra).
+        *   `conn_string` format: `<node_ip_1>[:<port>][,<node_ip_2>[:<port>]...][/<keyspace_name>]`
+        *   Example (single node): `127.0.0.1:9042/my_keyspace`
+        *   Example (multiple nodes): `node1.example.com:9042,node2.example.com:9042/my_keyspace`
+        *   Note: The query editor for ScyllaDB is the SQL editor (CQL is SQL-like).
+
+    *   **`opensearch`**: For OpenSearch services.
+        *   `conn_string` format: `http(s)://<hostname>[:<port>]`
+        *   Example: `http://localhost:9200`
+        *   Authentication: For authenticated OpenSearch, ensure your OpenSearch client (used by r2-data2) can pick up credentials from the environment or include them in the URL if your specific OpenSearch setup and client library version support it (e.g., `http://user:pass@localhost:9200`). Refer to the OpenSearch client documentation for best practices on authentication.
+        *   Note: The query editor for OpenSearch is a JSON editor, expecting OpenSearch Query DSL.
+
+    See `config/default.toml` for more examples.
 
 ### Running the Application
 

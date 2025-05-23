@@ -1,7 +1,18 @@
 mod mysql;
 mod pg;
+mod redis;
+mod scylladb;
+mod opensearch; // Add opensearch module
 
-use crate::{config::DatabaseConfig, error::AppError};
+use crate::{
+    config::DatabaseConfig,
+    db::{
+        opensearch::OpenSearchPoolHandler, // Import OpenSearchPoolHandler
+        redis::RedisPoolHandler,
+        scylladb::ScyllaDbPoolHandler,
+    },
+    error::AppError,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlparser::{ast, dialect::GenericDialect, parser::Parser};
@@ -17,6 +28,9 @@ const MAX_LIMIT: usize = 5000;
 pub enum DatabaseType {
     Postgres,
     Mysql,
+    Redis,
+    ScyllaDB,
+    OpenSearch,
 }
 
 #[derive(Debug)]
@@ -25,11 +39,17 @@ pub struct PgPoolHandler(PgPool);
 #[derive(Debug)]
 pub struct MySqlPoolHandler(MySqlPool);
 
+// Add ScyllaDbPoolHandler if it's not already implicitly part of the scylladb module import
+// pub struct ScyllaDbPoolHandler(scylla::Session); // Assuming Session is the correct type
+
 #[derive(Debug)]
 pub enum DbPool {
     Postgres(PgPoolHandler),
     MySql(MySqlPoolHandler),
-    // Add other pool types here if needed
+    ScyllaDb(ScyllaDbPoolHandler),
+    Redis(RedisPoolHandler),
+    OpenSearch(OpenSearchPoolHandler), // Add OpenSearch variant
+                                       // Add other pool types here if needed
 }
 
 pub trait PoolHandler: Sized {
@@ -357,6 +377,18 @@ impl PoolHandler for DbPool {
                 let pool = MySqlPoolHandler::try_new(db_config).await?;
                 Ok(DbPool::MySql(pool))
             }
+            DatabaseType::ScyllaDB => {
+                let pool = ScyllaDbPoolHandler::try_new(db_config).await?;
+                Ok(DbPool::ScyllaDb(pool))
+            }
+            DatabaseType::Redis => {
+                let pool = RedisPoolHandler::try_new(db_config).await?;
+                Ok(DbPool::Redis(pool))
+            }
+            DatabaseType::OpenSearch => { // Add OpenSearch case
+                let pool = OpenSearchPoolHandler::try_new(db_config).await?;
+                Ok(DbPool::OpenSearch(pool))
+            }
             #[allow(unreachable_patterns)]
             _ => Err(AppError::UnsupportedDatabaseType(
                 db_config.db_type.to_string(),
@@ -368,6 +400,9 @@ impl PoolHandler for DbPool {
         match self {
             DbPool::Postgres(pg_pool) => pg_pool.list_tables().await,
             DbPool::MySql(mysql_pool) => mysql_pool.list_tables().await,
+            DbPool::ScyllaDb(scylla_handler) => scylla_handler.list_tables().await,
+            DbPool::Redis(redis_handler) => redis_handler.list_tables().await,
+            DbPool::OpenSearch(os_handler) => os_handler.list_tables().await, // Add OpenSearch case
         }
     }
 
@@ -376,6 +411,9 @@ impl PoolHandler for DbPool {
         match self {
             DbPool::Postgres(pg_pool) => pg_pool.get_table_schema(table_name).await,
             DbPool::MySql(mysql_pool) => mysql_pool.get_table_schema(table_name).await,
+            DbPool::ScyllaDb(scylla_handler) => scylla_handler.get_table_schema(table_name).await,
+            DbPool::Redis(redis_handler) => redis_handler.get_table_schema(table_name).await,
+            DbPool::OpenSearch(os_handler) => os_handler.get_table_schema(table_name).await, // Add OpenSearch case
         }
     }
 
@@ -383,6 +421,9 @@ impl PoolHandler for DbPool {
         match self {
             DbPool::Postgres(pg_pool) => pg_pool.sanitize_query(query, limit).await,
             DbPool::MySql(mysql_pool) => mysql_pool.sanitize_query(query, limit).await,
+            DbPool::ScyllaDb(scylla_handler) => scylla_handler.sanitize_query(query, limit).await,
+            DbPool::Redis(redis_handler) => redis_handler.sanitize_query(query, limit).await,
+            DbPool::OpenSearch(os_handler) => os_handler.sanitize_query(query, limit).await, // Add OpenSearch case
         }
     }
 
@@ -394,6 +435,9 @@ impl PoolHandler for DbPool {
         match self {
             DbPool::Postgres(pg_pool) => pg_pool.execute_query(query, limit).await,
             DbPool::MySql(mysql_pool) => mysql_pool.execute_query(query, limit).await,
+            DbPool::ScyllaDb(scylla_handler) => scylla_handler.execute_query(query, limit).await,
+            DbPool::Redis(redis_handler) => redis_handler.execute_query(query, limit).await,
+            DbPool::OpenSearch(os_handler) => os_handler.execute_query(query, limit).await, // Add OpenSearch case
         }
     }
 }

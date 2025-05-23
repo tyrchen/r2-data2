@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { SqlEditor } from "@/components/SqlEditor";
+// import { SqlEditor } from "@/components/SqlEditor"; // Replaced by DynamicEditor
+import { DynamicEditor } from "@/components/editor/DynamicEditor"; // Added
 import { ResultViewer } from "@/components/ResultViewer";
 import { ThreeColumnLayout } from "@/components/layout/ThreeColumnLayout";
 import { CatalogBrowser } from "@/components/catalog/CatalogBrowser";
@@ -46,7 +47,8 @@ function App() {
             <div className="flex-shrink-0"><QueryTabBar /></div>
             <div className="flex-shrink-0"><EditorHeader /></div>
             <div className="overflow-hidden flex-grow p-1">
-              <SqlEditor />
+              {/* <SqlEditor /> */} {/* Replaced by DynamicEditor */}
+              <DynamicEditor /> {/* Added */}
             </div>
           </div>
         }

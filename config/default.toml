@@ -28,3 +28,26 @@ conn_string = "postgres://postgres:postgres@localhost:5432/lego"
 name = "wikipedia"
 type = "postgres"
 conn_string = "postgres://postgres:postgres@localhost:5432/wikipedia"
+
+# --- New Database Type Examples ---
+
+# Example for Redis
+[[databases]]
+name = "my_redis_cache"
+type = "redis"
+conn_string = "redis://127.0.0.1:6379/0" # Example Redis URL: redis://[<username>][:<password>@]<hostname>[:<port>][/<db_number>]
+
+# Example for ScyllaDB
+[[databases]]
+name = "my_scylla_cluster"
+type = "scylladb"
+conn_string = "127.0.0.1:9042/my_keyspace" # Example ScyllaDB: <node_ip>[:<port>][/<keyspace_name>]
+                                         # For multiple nodes, list them comma-separated: "node1:9042,node2:9042/my_keyspace"
+
+# Example for OpenSearch
+[[databases]]
+name = "my_opensearch_service"
+type = "opensearch"
+conn_string = "http://localhost:9200" # Example OpenSearch URL: http(s)://<hostname>[:<port>]
+                                      # For authenticated OpenSearch, include credentials in the URL if supported by your setup,
+                                      # or ensure the OpenSearch client can pick up credentials from the environment.
